@@ -1,0 +1,15 @@
+variables:
+  nodes: [1, 2, 4, 8]
+  partition: ["cn-ib", "cn-eth"]
+
+  bin: ["graph500_reference_bfs_sssp_smallbuf", "graph500_reference_bfs_sssp"]
+
+  scale: [14, 16, 20]
+  edgefactor: [8, 16, 32]
+
+command: "./bin/{bin} {scale} {edgefactor}"
+
+jobs:
+  - config: "{partition}_{nodes}nodes"
+    config_jobs:
+      - tag: "graph500_{partition}"
