@@ -1,0 +1,3 @@
+[submodule "PointerChasing/pointer-chasing"]
+	path = PointerChasing/pointer-chasing
+	url = https://github.com/afborchert/pointer-chasing.git
