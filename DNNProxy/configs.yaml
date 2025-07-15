@@ -1,0 +1,26 @@
+variables:
+  # partition: ["ib", "eth"]
+  nodes_ib: [2, 4] # , 6, 8
+  nodes_eth: [2, 4, 6, 8]
+
+haicgu:
+  scheduler: slurm
+
+  default_conf:
+    cpus_per_task: 128
+    time: "00:30:00"
+    account: "dcn"
+
+  configs:
+    # - name: "{partition}_{nodes}nodes"
+    #   partition: "cn-{partition}"
+    
+    - name: "ib_{nodes_ib}nodes"
+      partition: "cn-ib"
+      nodes: "{nodes_ib}"
+      ntasks: "{nodes_ib}"
+
+    - name: "eth_{nodes_eth}nodes"
+      partition: "cn-eth"
+      nodes: "{nodes_eth}"
+      ntasks: "{nodes_eth}"

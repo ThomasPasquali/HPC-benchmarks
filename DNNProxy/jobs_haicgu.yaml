@@ -1,0 +1,21 @@
+variables:
+  nodes_ib: [2, 4] # , 6, 8
+  nodes_eth: [2, 4, 6, 8]
+  benchmark: ['gpt2', 'bert']
+
+jobs:
+  # Infiniband
+  - config: "ib_{nodes_ib}nodes"
+    config_jobs:
+      - tag: "{benchmark}"
+        command: "mpirun -np {nodes_ib} {benchmark} 24 {nodes_ib}"
+      - tag: "resnet"
+        command: "mpirun -np {nodes_ib} resnet"
+
+  # Ethernet
+  - config: "eth_{nodes_eth}nodes"
+    config_jobs:
+      - tag: "{benchmark}"
+        command: "mpirun -np {nodes_eth} {benchmark} 24 {nodes_eth}"
+      - tag: "resnet"
+        command: "mpirun -np {nodes_eth} resnet"

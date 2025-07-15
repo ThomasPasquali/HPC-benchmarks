@@ -1,6 +1,6 @@
 variables:
   nodes: [1, 2, 4, 8]
-  partition: ["cn-ib", "cn-eth"]
+  partition: ["ib", "eth"]
 
 baldo:
   scheduler: slurm
