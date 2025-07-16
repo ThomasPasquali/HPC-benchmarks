@@ -1,3 +1,157 @@
+import itertools
+from pathlib import Path
+import pprint
+from statistics import geometric_mean
+import sbatchman as sbm
+import pandas as pd
+import matplotlib.pyplot as plt
+from typing import Dict, List, Union
+import re
+
+OUT_DIR = Path('results')
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+def plot_scaling_by_model(
+  df: pd.DataFrame,
+  cluster: str,
+  partition: str,
+  *,
+  model_color_map: Union[None, Dict[str, str]] = None,
+  node_col: str = "nodes",
+  time_col: str = "geomean_time",
+  model_col: str = "model",
+  figsize: tuple = (6, 4),
+  marker: str = "o"
+) -> plt.Axes:
+  """
+  Plot scaling curves (time vs. nodes) for each model on a single figure.
+
+  Parameters
+  ----------
+  df : pd.DataFrame
+      The full performance DataFrame with at least columns for
+      'cluster', 'partition', nodes, model, and time.
+  cluster : str
+      Cluster to select (e.g., "haicgu").
+  partition : str
+      Partition to select (e.g., "eth").
+  node_col, time_col, model_col : str, optional
+      Column names for the x-axis, y-axis, and model grouping.
+  figsize : tuple, optional
+      Size of the matplotlib figure.
+  marker : str, optional
+      Marker style for each line.
+
+  Returns
+  -------
+  matplotlib.axes.Axes
+      The axis with the plot (useful for further customization).
+  """
+  # ---- filter for the requested slice ----
+  mask = (df["cluster"] == cluster) & (df["partition"] == partition)
+  slice_df = df.loc[mask].copy()
+
+  if slice_df.empty:
+      raise ValueError(f"No data for cluster='{cluster}' & partition='{partition}'")
+
+  # Ensure plot order by node count
+  slice_df.sort_values(node_col, inplace=True)
+
+  # ---- make the plot ----
+  fig, ax = plt.subplots(figsize=figsize)
+
+  # Plot each model separately
+  for model, grp in slice_df.groupby(model_col):
+    ax.plot(
+      grp[node_col],
+      grp[time_col],
+      label=model,
+      marker=marker,
+      color=model_color_map[str(model)] if model_color_map else None
+    )
+
+  ax.set_xlabel("Number of Nodes")
+  ax.set_ylabel("Geometric Mean Time (s)")
+  ax.set_title(f"Scaling on {cluster} / {partition}")
+  ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+  ax.legend(title="Model")
+  fig.tight_layout()
+
+  return ax
+
+
+def parse_stdout(job: sbm.Job) -> Dict[str, List[float]]:
+  lines = job.get_stdout().strip().split('\n')
+  times = {}
+
+  for line in lines[1:]:
+    parts = line.split(', ')
+    model, time = parts[-1].split(' = ')
+    time = float(time.split(' ')[0])
+
+    if 'GPT2-' in model:
+      model = 'gpt2'
+    elif 'Bert-' in model:
+      model = 'bert'
+    elif 'ResNet-50' in model:
+      if '(allreduce)' in model:
+        model = 'resnet-allreduce'
+      else:
+        model = 'resnet-ring'
+
+    if model not in times: times[model] = []
+    times[model].append(time)
+
+  return times
+
+def filter_jobs(jobs: List[sbm.Job]) -> List[sbm.Job]:
+  filtered_jobs = []
+  for job in jobs:
+    if job.status in ['COMPLETED']:
+      filtered_jobs.append(job)
+  return filtered_jobs
+
+
+def main():
+  jobs = filter_jobs(sbm.jobs_list(from_active=True, from_archived=True))
+  data = []
+
+  for job in jobs:
+    res = parse_stdout(job)
+    # print('='*50)
+    # pprint.pprint(job)
+    # print(res)
+    for model, times in res.items():
+      m = re.match(r'(\w+)_(\d+)nodes', job.config_name)
+      data.append({
+        'cluster': job.cluster_name,
+        'partition': m.group(1),
+        'nodes': int(m.group(2)),
+        'model': model,
+        'geomean_time': geometric_mean(times),
+      })
+
+  df = pd.DataFrame(data)
+  print(df)
+
+  color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+  models = df['model'].unique()
+  model_color_map = dict(zip(models, itertools.cycle(color_cycle)))
+
+  for cluster, partition in df.groupby(["cluster", "partition"]).groups.keys():
+    plot_scaling_by_model(df, cluster="haicgu", partition="eth")
+    path = OUT_DIR / f'DNNProxy_{cluster}_{partition}.png'
+    plt.savefig(path)
+    print(f'Plot saved to {path.resolve().absolute()}')
+    plt.close()
+
+
+if __name__ == "__main__":
+  main()
+
+
+# SAMPLE OUTPUTS
+
 # [tpasquali@cn19 DNNProxy]$ mpirun -np 4 resnet 
 # Rank = 2, world_size = 4, total_params = 25559081, ResNet-50 data parallelism (allreduce) runtime for each iteration = 0.141914 s
 # Rank = 3, world_size = 4, total_params = 25559081, ResNet-50 data parallelism (allreduce) runtime for each iteration = 0.141914 s
@@ -25,51 +179,3 @@
 # [tpasquali@cn19 DNNProxy]$ mpirun -np 2 bert 24 2
 # Rank = 0, world_size = 2, layers = 24, stages = 2, total_params = 367480636, Bert-large pipeline and data parallelism runtime for each iteration = 0.007392 s
 # Rank = 1, world_size = 2, layers = 24, stages = 2, total_params = 367480636, Bert-large pipeline and data parallelism runtime for each iteration = 0.007392 s
-
-import pprint
-import sbatchman as sbm
-from typing import List
-import re
-
-# PATTERN = r'(\w+(?: \w+)*?) = ([^,]+)'
-
-# GPT2_TIME_KEY = "GPT2-large pipeline and data parallelism runtime for each iteration"
-# BERT_TIME_KEY = "Bert-large pipeline and data parallelism runtime for each iteration"
-# RESNET_RING_TIME_KEY = "ResNet-50 data parallelism (neighbors in ring) runtime for each iteration"
-# RESNET_ALLRED_TIME_KEY = "ResNet-50 data parallelism (allreduce) runtime for each iteration"
-
-# KEYS_DICT = {
-#   'gpt2': GPT2_TIME_KEY,
-#   'bert': BERT_TIME_KEY,
-#   'resnet': RESNET_RING_TIME_KEY, # FIXME
-# }
-
-def parse_stdout(job: sbm.Job):
-  lines = job.get_stdout().strip().split('\n')
-  times = []
-  for line in lines[1:]:
-    # matches = re.findall(PATTERN, line)
-    # result = {k.strip(): v.strip() for k, v in matches}
-    # times.append(result[KEYS_DICT[job.tag]])
-    parts = line.split(', ')
-    print(parts)
-    times.append(float(parts[-1].split(' = ')[1].split(' ')[0])) # TODO fix resnet
-  return times
-
-def filter_jobs(jobs: List[sbm.Job]) -> List[sbm.Job]:
-  filtered_jobs = []
-  for job in jobs:
-    if job.status in ['COMPLETED']:
-      filtered_jobs.append(job)
-  return filtered_jobs
-
-
-def main():
-  jobs = filter_jobs(sbm.jobs_list(from_active=True, from_archived=True))
-
-  for job in jobs:
-    pprint.pprint(job)
-    print(parse_stdout(job))
-
-if __name__ == "__main__":
-  main()

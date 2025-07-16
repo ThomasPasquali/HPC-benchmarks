@@ -4,3 +4,6 @@
 [submodule "DNNProxy/DNN-cpp-proxies"]
 	path = DNNProxy/DNN-cpp-proxies
 	url = https://github.com/HicrestLaboratory/DNN-cpp-proxies.git
+[submodule "STREAM/STREAM"]
+	path = STREAM/STREAM
+	url = https://github.com/jeffhammond/STREAM.git
