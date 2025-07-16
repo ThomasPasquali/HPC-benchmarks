@@ -1,8 +1,8 @@
 variables:
   nodes: [1, 2, 4, 8]
-  partition: ["cn-ib", "cn-eth"]
+  partition: ["eth"] #["ib", "eth"]
 
-  bin: ["graph500_reference_bfs_sssp_smallbuf", "graph500_reference_bfs_sssp"]
+  bin: ["graph500_reference_bfs"] # ["graph500_reference_bfs_sssp_smallbuf", "graph500_reference_bfs_sssp"]
 
   scale: [14, 16, 20]
   edgefactor: [8, 16, 32]

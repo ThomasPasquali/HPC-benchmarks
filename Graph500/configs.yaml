@@ -2,7 +2,7 @@ variables:
   nodes: [1, 2, 4, 8]
   partition: ["ib", "eth"]
 
-baldo:
+haicgu:
   scheduler: slurm
 
   default_conf:

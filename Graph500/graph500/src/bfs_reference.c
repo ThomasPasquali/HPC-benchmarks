@@ -26,6 +26,12 @@
 #ifdef DEBUGSTATS
 extern int64_t nbytes_sent,nbytes_rcvd;
 #endif
+
+
+extern double *bfs_custom_comm_timer;
+extern int run_number;
+
+
 // two arrays holding visited VERTEX_LOCALs for current and next level
 // we swap pointers each time
 int *q1,*q2;
@@ -106,7 +112,10 @@ void run_bfs(int64_t root, int64_t* pred) {
 		for(i=0;i<qc;i++)
 			for(j=rowstarts[q1[i]];j<rowstarts[q1[i]+1];j++)
 				send_visit(COLUMN(j),q1[i]);
+
+		double custom_start_time = MPI_Wtime();
 		aml_barrier();
+		bfs_custom_comm_timer[run_number] += MPI_Wtime() - custom_start_time;
 
 		qc=q2c;int *tmp=q1;q1=q2;q2=tmp;
 		sum=qc;
@@ -121,8 +130,10 @@ void run_bfs(int64_t root, int64_t* pred) {
 		if(!my_pe()) printf (" --lvl%d : %lld(%lld,%3.2f) visited in %5.2fs, network aggr %5.2fGb/s\n",lvl++,sum,nvisited,((double)nvisited/(double)g.notisolated)*100.0,-t0,-(double)nbytes_sent*8.0/(1.e9*t0));
 #endif
 	}
-	aml_barrier();
 
+	double custom_start_time = MPI_Wtime();
+	aml_barrier();
+	bfs_custom_comm_timer[run_number] += MPI_Wtime() - custom_start_time;
 }
 
 //we need edge count to calculate teps. Validation will check if this count is correct

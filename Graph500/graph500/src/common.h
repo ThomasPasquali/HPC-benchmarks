@@ -32,6 +32,7 @@ typedef struct {
 	uint64_t comms_volume;
 	// double comm_time;
 } CustomCommStats;
+#define CUSTOM_COMM_STATS_IDX(rankFrom, rankTo) ((run_number * size * (size-1)) + (rankFrom * (size-1)) + rankTo)
 
 /* Distribute edges by their endpoints (make two directed copies of each input
  * undirected edge); distribution is 1-d and cyclic. */

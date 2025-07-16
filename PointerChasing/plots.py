@@ -16,11 +16,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sbatchman as sbm
 
-# TODO
-HW_SPECS = {
-  'pioneer':None,
-  'bananaf3':None,
-  'arriesgado':None,
+# [L1, L2, L3] .... kind of ...
+CACHE_SIZES = {
+  'pioneer':    [64 * 1024, 1 * 1024 * 1024, 64 * 1024 * 1024],
+  'bananaf3':   [32 * 1024, 512 * 1024, 512 * 1024],
+  'arriesgado': [64 * 1024, 2 * 1024 * 1024, 0],
 }
 
 
@@ -38,9 +38,10 @@ def plot_random_chase(src: Path, dst: Path, hw_name: str) -> None:
   ax.set_title("Access times in dependence of memory area")
 
   # draw vertical cache-size markers (blue)
-  l1, l2, l3 = 32 * 1024, 256 * 1024, 12_288 * 1024  # bytes
+  l1, l2, l3 = CACHE_SIZES[hw_name]
   y_max = y.max()
   for pos in (l1, l2, l3):
+    if pos > 0:
       ax.axvline(x=pos, ymin=0, ymax=1, linewidth=1)
 
   ax.set_ylim(0, y_max * 1.05)

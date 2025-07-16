@@ -31,13 +31,32 @@
 #include <stdint.h>
 #include <inttypes.h>
 
+#define NUM_BFS_ROOTS 64
+int run_number = 0;
+
 /****** CUSTOM STATS ******/
 
 // defined in common.h
-CustomCommStats* bfs_custom_stats;
+CustomCommStats* bfs_custom_comm_stats;
+double *bfs_custom_comm_timer;
 
 extern int size;
-#define CUSTOM_COMM_STATS_IDX(rankFrom, rankTo) rankFrom * (size-1) + rankTo
+
+void print_custom_metrics(int rank, int size) {
+    for (int run = 0; run < NUM_BFS_ROOTS; run++) {
+        // Print barrier wait time per run
+        printf("[METRIC] rank=%d run=%d barrier_wait_time=%.6f\n", rank, run, bfs_custom_comm_timer[run]);
+
+        for (int peer = 0; peer < size; peer++) {
+            if (peer == rank) continue;
+
+            int idx = run * size * (size - 1) + rank * (size - 1) + (peer < rank ? peer : peer - 1);
+            CustomCommStats *stats = &bfs_custom_comm_stats[idx];
+
+            printf("[METRIC] rank=%d run=%d dest=%d n_comms=%d volume=%zu\n", rank, run, peer, stats->n_comms, stats->comms_volume);
+        }
+    }
+}
 
 /****** END CUSTOM STATS ******/
 
@@ -82,12 +101,15 @@ int main(int argc, char** argv) {
 	aml_init(&argc,&argv); //includes MPI_Init inside
 	setup_globals();
 
-	// bfs_custom_stats = (CustomCommStats*)malloc(size*(size-1)*sizeof(CustomCommStats));
-	CustomCommStats __bfs_custom_stats[size*(size-1)];
-	bfs_custom_stats = __bfs_custom_stats;
-	for (size_t i = 0; i < size*(size-1); i++) {
-		__bfs_custom_stats[i].n_comms = 0;
-		__bfs_custom_stats[i].comms_volume = 0;
+	// Custom
+	bfs_custom_comm_stats = (CustomCommStats*)malloc(NUM_BFS_ROOTS*size*(size-1)*sizeof(CustomCommStats));
+	bfs_custom_comm_timer = (double*)malloc(NUM_BFS_ROOTS * sizeof(double));
+	for (size_t i = 0; i < NUM_BFS_ROOTS*size*(size-1); i++) {
+		bfs_custom_comm_stats[i].n_comms = 0;
+		bfs_custom_comm_stats[i].comms_volume = 0;
+	}
+	for (size_t i = 0; i < NUM_BFS_ROOTS; i++) {
+		bfs_custom_comm_timer[i] = 0.0;
 	}
 	
 
@@ -181,8 +203,7 @@ int main(int argc, char** argv) {
 	/* Make the raw graph edges. */
 	/* Get roots for BFS runs, plus maximum vertex with non-zero degree (used by
 	 * validator). */
-	int num_bfs_roots = 64;
-	int64_t* bfs_roots = (int64_t*)xmalloc(num_bfs_roots * sizeof(int64_t));
+	int64_t* bfs_roots = (int64_t*)xmalloc(NUM_BFS_ROOTS * sizeof(int64_t));
 
 	double make_graph_start = MPI_Wtime();
 	if( !tg.data_in_file || tg.write_file )
@@ -323,9 +344,10 @@ int main(int argc, char** argv) {
 
 	//generate non-isolated roots
 	{
+		// if (rank == 0) printf("Generating roots...\n");
 		uint64_t counter = 0;
 		int bfs_root_idx;
-		for (bfs_root_idx = 0; bfs_root_idx < num_bfs_roots; ++bfs_root_idx) {
+		for (bfs_root_idx = 0; bfs_root_idx < NUM_BFS_ROOTS; ++bfs_root_idx) {
 			int64_t root;
 			while (1) {
 				double d[2];
@@ -348,19 +370,20 @@ int main(int argc, char** argv) {
 			}
 			bfs_roots[bfs_root_idx] = root;
 		}
-		num_bfs_roots = bfs_root_idx;
-
+		if (rank == 0 && NUM_BFS_ROOTS != bfs_root_idx) fprintf(stderr, "#roots: %u == %d\n", NUM_BFS_ROOTS, bfs_root_idx);
+		assert(NUM_BFS_ROOTS == bfs_root_idx);
+		// if (rank == 0) printf("Roots generated!\n");
 
 	}
 	/* Number of edges visited in each BFS; a double so get_statistics can be
 	 * used directly. */
-	double* edge_counts = (double*)xmalloc(num_bfs_roots * sizeof(double));
-	double* cut_edge_counts = (double*)xmalloc(num_bfs_roots * sizeof(double));
+	double* edge_counts = (double*)xmalloc(NUM_BFS_ROOTS * sizeof(double));
+	double* cut_edge_counts = (double*)xmalloc(NUM_BFS_ROOTS * sizeof(double));
 
 	/* Run BFS. */
 	int validation_passed = 1;
-	double* bfs_times = (double*)xmalloc(num_bfs_roots * sizeof(double));
-	double* validate_times = (double*)xmalloc(num_bfs_roots * sizeof(double));
+	double* bfs_times = (double*)xmalloc(NUM_BFS_ROOTS * sizeof(double));
+	double* validate_times = (double*)xmalloc(NUM_BFS_ROOTS * sizeof(double));
 	uint64_t nlocalverts = get_nlocalverts_for_pred();
 	int64_t* pred = (int64_t*)xMPI_Alloc_mem(nlocalverts * sizeof(int64_t));
 	float* shortest = (float*)xMPI_Alloc_mem(nlocalverts * sizeof(float));
@@ -374,7 +397,7 @@ int main(int argc, char** argv) {
                 int eloop;
                 if(!my_pe()) printf("starting energy loop BFS\n");
                 for(eloop=0;eloop<1000000;eloop++)
-                        for (bfs_root_idx = 0; bfs_root_idx < num_bfs_roots; ++bfs_root_idx) {
+                        for (bfs_root_idx = 0; bfs_root_idx < NUM_BFS_ROOTS; ++bfs_root_idx) {
                 clean_pred(&pred[0]);
                 run_bfs(bfs_roots[bfs_root_idx], &pred[0]);
                 }
@@ -385,8 +408,9 @@ int main(int argc, char** argv) {
 			validate_result(1,&tg, nlocalverts, bfs_roots[0], pred,shortest,NULL);
 		}
 
-		for (bfs_root_idx = 0; bfs_root_idx < num_bfs_roots; ++bfs_root_idx) {
+		for (bfs_root_idx = 0; bfs_root_idx < NUM_BFS_ROOTS; ++bfs_root_idx) {
 			int64_t root = bfs_roots[bfs_root_idx];
+			run_number = bfs_root_idx;
 
 			#ifdef VERBOSE_PRINTS
 				if (rank == 0) fprintf(stderr, "Running BFS %d\n", bfs_root_idx);
@@ -442,8 +466,8 @@ int main(int argc, char** argv) {
 
 	}
 #ifdef SSSP
-	double* sssp_times = (double*)xmalloc(num_bfs_roots * sizeof(double));
-	double* validate_times2 = (double*)xmalloc(num_bfs_roots * sizeof(double));
+	double* sssp_times = (double*)xmalloc(NUM_BFS_ROOTS * sizeof(double));
+	double* validate_times2 = (double*)xmalloc(NUM_BFS_ROOTS * sizeof(double));
 
 	clean_shortest(shortest);
 	clean_pred(pred);
@@ -452,14 +476,14 @@ int main(int argc, char** argv) {
 		int eloop;
 		if(!my_pe()) printf("starting energy loop SSSP\n");
 		for(eloop=0;eloop<1000000;eloop++)
-			for (bfs_root_idx = 0; bfs_root_idx < num_bfs_roots; ++bfs_root_idx) {
+			for (bfs_root_idx = 0; bfs_root_idx < NUM_BFS_ROOTS; ++bfs_root_idx) {
 				clean_shortest(shortest);
 				clean_pred(&pred[0]);
 				run_sssp(bfs_roots[bfs_root_idx], &pred[0],shortest);
 		}
 		if(!my_pe()) printf("finished energy loop SSSP\n");
 #endif
-	for (bfs_root_idx = 0; bfs_root_idx < num_bfs_roots; ++bfs_root_idx) {
+	for (bfs_root_idx = 0; bfs_root_idx < NUM_BFS_ROOTS; ++bfs_root_idx) {
 		int64_t root = bfs_roots[bfs_root_idx];
 
 		#ifdef VERBOSE_PRINTS
@@ -540,15 +564,15 @@ int main(int argc, char** argv) {
 			fprintf(stdout, "No results printed for invalid run.\n");
 		} else {
 			int i;
-			//for (i = 0; i < num_bfs_roots; ++i) printf(" %g \n",edge_counts[i]);
+			//for (i = 0; i < NUM_BFS_ROOTS; ++i) printf(" %g \n",edge_counts[i]);
 			fprintf(stdout, "SCALE:                          %d\n", SCALE);
 			fprintf(stdout, "edgefactor:                     %d\n", edgefactor);
-			fprintf(stdout, "NBFS:                           %d\n", num_bfs_roots);
+			fprintf(stdout, "NBFS:                           %d\n", NUM_BFS_ROOTS);
 			fprintf(stdout, "graph_generation:               %g\n", make_graph_time);
 			fprintf(stdout, "num_mpi_processes:              %d\n", size);
 			fprintf(stdout, "construction_time:              %g\n", data_struct_time);
 			volatile double stats[s_LAST];
-			get_statistics(bfs_times, num_bfs_roots, stats);
+			get_statistics(bfs_times, NUM_BFS_ROOTS, stats);
 			fprintf(stdout, "bfs  min_time:                  %g\n", stats[s_minimum]);
 			fprintf(stdout, "bfs  firstquartile_time:        %g\n", stats[s_firstquartile]);
 			fprintf(stdout, "bfs  median_time:               %g\n", stats[s_median]);
@@ -557,12 +581,12 @@ int main(int argc, char** argv) {
 			fprintf(stdout, "bfs  mean_time:                 %g\n", stats[s_mean]);
 			fprintf(stdout, "bfs  stddev_time:               %g\n", stats[s_std]);
 
-			double* secs_per_cut_edge = (double*)xmalloc(num_bfs_roots * sizeof(double));
-			for (i = 0; i < num_bfs_roots; ++i) secs_per_cut_edge[i] = bfs_times[i] / cut_edge_counts[i];
-			get_statistics(secs_per_cut_edge, num_bfs_roots, stats);
+			double* secs_per_cut_edge = (double*)xmalloc(NUM_BFS_ROOTS * sizeof(double));
+			for (i = 0; i < NUM_BFS_ROOTS; ++i) secs_per_cut_edge[i] = bfs_times[i] / cut_edge_counts[i];
+			get_statistics(secs_per_cut_edge, NUM_BFS_ROOTS, stats);
 			fprintf(stdout, "bfs  harmonic_mean_cut_TEPS:  !  %g\n", 1. / stats[s_mean]);
 #ifdef SSSP
-			get_statistics(sssp_times, num_bfs_roots, stats);
+			get_statistics(sssp_times, NUM_BFS_ROOTS, stats);
 			fprintf(stdout, "sssp min_time:                  %g\n", stats[s_minimum]);
 			fprintf(stdout, "sssp firstquartile_time:        %g\n", stats[s_firstquartile]);
 			fprintf(stdout, "sssp median_time:               %g\n", stats[s_median]);
@@ -570,12 +594,12 @@ int main(int argc, char** argv) {
 			fprintf(stdout, "sssp max_time:                  %g\n", stats[s_maximum]);
 			fprintf(stdout, "sssp mean_time:                 %g\n", stats[s_mean]);
 			fprintf(stdout, "sssp stddev_time:               %g\n", stats[s_std]);
-			double* secs_per_cut_edge_sssp = (double*)xmalloc(num_bfs_roots * sizeof(double));
-			for (i = 0; i < num_bfs_roots; ++i) secs_per_cut_edge_sssp[i] = sssp_times[i] / cut_edge_counts[i];
-			get_statistics(secs_per_cut_edge_sssp, num_bfs_roots, stats);
+			double* secs_per_cut_edge_sssp = (double*)xmalloc(NUM_BFS_ROOTS * sizeof(double));
+			for (i = 0; i < NUM_BFS_ROOTS; ++i) secs_per_cut_edge_sssp[i] = sssp_times[i] / cut_edge_counts[i];
+			get_statistics(secs_per_cut_edge_sssp, NUM_BFS_ROOTS, stats);
 			fprintf(stdout, "sssp  harmonic_mean_cut_TEPS: !  %g\n", 1. / stats[s_mean]);
 #endif
-			get_statistics(edge_counts, num_bfs_roots, stats);
+			get_statistics(edge_counts, NUM_BFS_ROOTS, stats);
 			fprintf(stdout, "min_nedge:                      %.11g\n", stats[s_minimum]);
 			fprintf(stdout, "firstquartile_nedge:            %.11g\n", stats[s_firstquartile]);
 			fprintf(stdout, "median_nedge:                   %.11g\n", stats[s_median]);
@@ -583,9 +607,9 @@ int main(int argc, char** argv) {
 			fprintf(stdout, "max_nedge:                      %.11g\n", stats[s_maximum]);
 			fprintf(stdout, "mean_nedge:                     %.11g\n", stats[s_mean]);
 			fprintf(stdout, "stddev_nedge:                   %.11g\n", stats[s_std]);
-			double* secs_per_edge = (double*)xmalloc(num_bfs_roots * sizeof(double));
-			for (i = 0; i < num_bfs_roots; ++i) secs_per_edge[i] = bfs_times[i] / edge_counts[i];
-			get_statistics(secs_per_edge, num_bfs_roots, stats);
+			double* secs_per_edge = (double*)xmalloc(NUM_BFS_ROOTS * sizeof(double));
+			for (i = 0; i < NUM_BFS_ROOTS; ++i) secs_per_edge[i] = bfs_times[i] / edge_counts[i];
+			get_statistics(secs_per_edge, NUM_BFS_ROOTS, stats);
 			fprintf(stdout, "bfs  min_TEPS:                  %g\n", 1. / stats[s_maximum]);
 			fprintf(stdout, "bfs  firstquartile_TEPS:        %g\n", 1. / stats[s_thirdquartile]);
 			fprintf(stdout, "bfs  median_TEPS:               %g\n", 1. / stats[s_median]);
@@ -600,20 +624,20 @@ int main(int argc, char** argv) {
 			 * Publisher(s): Institute of Mathematical Statistics
 			 * Stable URL: http://www.jstor.org/stable/2235723
 			 * (same source as in specification). */
-			fprintf(stdout, "bfs  harmonic_stddev_TEPS:      %g\n", stats[s_std] / (stats[s_mean] * stats[s_mean] * sqrt(num_bfs_roots - 1)));
+			fprintf(stdout, "bfs  harmonic_stddev_TEPS:      %g\n", stats[s_std] / (stats[s_mean] * stats[s_mean] * sqrt(NUM_BFS_ROOTS - 1)));
 #ifdef SSSP
-			for (i = 0; i < num_bfs_roots; ++i) secs_per_edge[i] = sssp_times[i] / edge_counts[i];
-			get_statistics(secs_per_edge, num_bfs_roots, stats);
+			for (i = 0; i < NUM_BFS_ROOTS; ++i) secs_per_edge[i] = sssp_times[i] / edge_counts[i];
+			get_statistics(secs_per_edge, NUM_BFS_ROOTS, stats);
 			fprintf(stdout, "sssp min_TEPS:                  %g\n", 1. / stats[s_maximum]);
 			fprintf(stdout, "sssp firstquartile_TEPS:        %g\n", 1. / stats[s_thirdquartile]);
 			fprintf(stdout, "sssp median_TEPS:               %g\n", 1. / stats[s_median]);
 			fprintf(stdout, "sssp thirdquartile_TEPS:        %g\n", 1. / stats[s_firstquartile]);
 			fprintf(stdout, "sssp max_TEPS:                  %g\n", 1. / stats[s_minimum]);
 			fprintf(stdout, "sssp harmonic_mean_TEPS:     !  %g\n", 1. / stats[s_mean]);
-			fprintf(stdout, "sssp harmonic_stddev_TEPS:      %g\n", stats[s_std] / (stats[s_mean] * stats[s_mean] * sqrt(num_bfs_roots - 1)));
+			fprintf(stdout, "sssp harmonic_stddev_TEPS:      %g\n", stats[s_std] / (stats[s_mean] * stats[s_mean] * sqrt(NUM_BFS_ROOTS - 1)));
 #endif
 			free(secs_per_edge); secs_per_edge = NULL;
-			get_statistics(validate_times, num_bfs_roots, stats);
+			get_statistics(validate_times, NUM_BFS_ROOTS, stats);
 			fprintf(stdout, "bfs  min_validate:              %g\n", stats[s_minimum]);
 			fprintf(stdout, "bfs  firstquartile_validate:    %g\n", stats[s_firstquartile]);
 			fprintf(stdout, "bfs  median_validate:           %g\n", stats[s_median]);
@@ -622,7 +646,7 @@ int main(int argc, char** argv) {
 			fprintf(stdout, "bfs  mean_validate:             %g\n", stats[s_mean]);
 			fprintf(stdout, "bfs  stddev_validate:           %g\n", stats[s_std]);
 #ifdef SSSP
-			get_statistics(validate_times2, num_bfs_roots, stats);
+			get_statistics(validate_times2, NUM_BFS_ROOTS, stats);
 			fprintf(stdout, "sssp min_validate:              %g\n", stats[s_minimum]);
 			fprintf(stdout, "sssp firstquartile_validate:    %g\n", stats[s_firstquartile]);
 			fprintf(stdout, "sssp median_validate:           %g\n", stats[s_median]);
@@ -632,15 +656,20 @@ int main(int argc, char** argv) {
 			fprintf(stdout, "sssp stddev_validate:           %g\n", stats[s_std]);
 #endif
 #if 0
-			for (i = 0; i < num_bfs_roots; ++i) {
+			for (i = 0; i < NUM_BFS_ROOTS; ++i) {
 				fprintf(stdout, "Run %3d:                        %g s, validation %g s\n", i + 1, bfs_times[i], validate_times[i]);
 				fprintf(stdout, "Run %3d:                        %g s, validation %g s\n", i + 1, sssp_times[i], validate_times2[i]);
 			}
 #endif
-
-
 		}
 	}
+	
+	// Custom stats
+	fflush(stdout);
+	MPI_Barrier(MPI_COMM_WORLD);
+	print_custom_metrics(rank, size);
+	fflush(stdout);
+
 	free(edge_counts);
 	free(bfs_times);
 	free(validate_times);
@@ -648,10 +677,12 @@ int main(int argc, char** argv) {
 	free(sssp_times);
 	free(validate_times2);
 #endif
+
+	// Custom
+	free(bfs_custom_comm_stats);
+	free(bfs_custom_comm_timer);
+
 	cleanup_globals();
-
-	// free(bfs_custom_stats);
-
 	aml_finalize(); //includes MPI_Finalize()
 	return 0;
 }

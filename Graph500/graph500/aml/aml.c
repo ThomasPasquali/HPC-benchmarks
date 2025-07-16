@@ -124,8 +124,8 @@ volatile static int inbarrier=0;
 static void (*aml_handlers[256]) (int,void *,int); //pointers to user-provided AM handlers
 
 
-extern CustomCommStats* bfs_custom_stats;
-
+extern CustomCommStats *bfs_custom_comm_stats;
+extern int run_number;
 
 //internode comm (proc number X from each group)
 //intranode comm (all cores of one nodegroup)
@@ -246,8 +246,6 @@ static void aml_poll(void) {
 
 //flush internode buffer to destination node
 inline void flush_buffer( int node ) {
-	// double time_start = MPI_Wtime();
-
 	MPI_Status stsend;
 	int flag=0,index,tmp;
 	if (sendsize[node] == 0 && acks[node]==0 ) return;
@@ -257,7 +255,8 @@ inline void flush_buffer( int node ) {
 	}
 
 	// Custom stats
-	// bfs_custom_stats[CUSTOM_COMM_STATS_IDX()].
+	++(bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].n_comms);
+	bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].comms_volume += sendsize[node];
 
 	MPI_Isend(SENDSOURCE(node), sendsize[node], MPI_CHAR,node, acks[node], comm, rqsend+index );
 	nbytes_sent+=sendsize[node];
@@ -265,9 +264,6 @@ inline void flush_buffer( int node ) {
 	sendsize[node] = 0;
 	acks[node] = 0;
 	tmp=activebuf[index]; activebuf[index]=nbuf[node]; nbuf[node]=tmp; //swap bufs
-
-	// double time_end = MPI_Wtime();
-
 }
 //flush intranode buffer, NB:node is local number of pe in group
 inline void flush_buffer_intra( int node ) {
@@ -278,6 +274,11 @@ inline void flush_buffer_intra( int node ) {
 		aml_poll_intra();
 		MPI_Testany(NSEND_intra,rqsend_intra,&index,&flag,&stsend);
 	}
+
+	// Custom stats
+	++(bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].n_comms);
+	bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].comms_volume += sendsize_intra[node];
+
 	MPI_Isend( SENDSOURCE_intra(node), sendsize_intra[node], MPI_CHAR,
 			node, acks_intra[node], comm_intra, rqsend_intra+index );
 	if (sendsize_intra[node] > 0) ack_intra++;
