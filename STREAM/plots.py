@@ -149,7 +149,7 @@ def _build_dataframe_from_jobs(status: List[str]) -> pd.DataFrame:
 # Plotting helper
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _plot(df: pd.DataFrame, output: str | None) -> None:
+def _plot(df: pd.DataFrame, cores: List[int] | None, output: str | None) -> None:
   marker_cycle = ["o", "s", "^", "d", "x", "P", "*", "v", ">"]
 
   fig, axes = plt.subplots(2, 2, figsize=(13, 9), sharey=False)
@@ -158,6 +158,9 @@ def _plot(df: pd.DataFrame, output: str | None) -> None:
   for idx, func in enumerate(FUNCTIONS):
     ax = axes[idx]
     func_df = df[df["function"] == func]
+    if cores:
+      func_df = func_df[func_df['cores'].isin(cores)]
+
     for j, (hw, group) in enumerate(func_df.groupby("hardware", sort=False)):
       group_sorted = group.sort_values("cores")
       ax.plot(
@@ -199,22 +202,25 @@ def main(argv: list[str] | None = None) -> None:
     files_p.add_argument("inputs", nargs="+", help="STREAM output text files")
     files_p.add_argument("-H", "--hardware", nargs="+", help="Hardware label per input file")
     files_p.add_argument("-o", "--output", help="Save figure instead of displaying it")
+    files_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
 
     # ── sbm sub-command ────────────────────────────────────────────────
     sbm_p = subparsers.add_parser("sbm", help="Pull STREAM outputs from sbm jobs")
     sbm_p.add_argument("-s", "--status", nargs="+", default=["COMPLETE"], help="Job status filter")
     sbm_p.add_argument("-o", "--output", help="Save figure instead of displaying it")
+    sbm_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
 
     args = parser.parse_args(argv)
+    cores = [int(c) for c in args.cores] if args.cores else None
 
     if args.mode == "files":
-        labels = _infer_hardware_labels(args.inputs, args.hardware)
-        df = _build_dataframe_from_files(args.inputs, labels)
-        _plot(df, args.output)
+      labels = _infer_hardware_labels(args.inputs, args.hardware)
+      df = _build_dataframe_from_files(args.inputs, labels)
+      _plot(df, cores, args.output)
 
     elif args.mode == "sbm":
-        df = _build_dataframe_from_jobs(args.status)
-        _plot(df, args.output)
+      df = _build_dataframe_from_jobs(args.status)
+      _plot(df, cores, args.output)
 
 
 if __name__ == "__main__":

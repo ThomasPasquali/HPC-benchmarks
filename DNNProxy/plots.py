@@ -69,10 +69,90 @@ def plot_scaling_by_model(
       marker=marker,
       color=model_color_map[str(model)] if model_color_map else None
     )
-
+    
+  xticks = sorted(slice_df[node_col].unique())
+  ax.set_xticks(xticks)
   ax.set_xlabel("Number of Nodes")
   ax.set_ylabel("Geometric Mean Time (s)")
   ax.set_title(f"Scaling on {cluster} / {partition}")
+  ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+  ax.legend(title="Model")
+  fig.tight_layout()
+
+  return ax
+
+
+def plot_performance_ratio(
+  df: pd.DataFrame,
+  ref_cluster: str,
+  ref_partition: str,
+  cmp_cluster: str,
+  cmp_partition: str,
+  *,
+  node_col: str = "nodes",
+  time_col: str = "geomean_time",
+  model_col: str = "model",
+  figsize: tuple = (6, 4),
+  marker: str = "o"
+) -> plt.Axes:
+  """
+  Plot performance ratio (ref_time / cmp_time) for each model over node counts.
+
+  Parameters
+  ----------
+  df : pd.DataFrame
+      The full performance DataFrame.
+  ref_cluster, ref_partition : str
+      The reference cluster and partition.
+  cmp_cluster, cmp_partition : str
+      The cluster and partition to compare against.
+  node_col, time_col, model_col : str
+      Column names for x-axis, y-axis, and model.
+  figsize : tuple
+      Size of the matplotlib figure.
+  marker : str
+      Marker for the line plot.
+
+  Returns
+  -------
+  matplotlib.axes.Axes
+      The axis with the plot.
+  """
+  # Filter the two slices
+  ref_df = df[(df["cluster"] == ref_cluster) & (df["partition"] == ref_partition)]
+  cmp_df = df[(df["cluster"] == cmp_cluster) & (df["partition"] == cmp_partition)]
+
+  if ref_df.empty or cmp_df.empty:
+    raise ValueError("One of the cluster/partition combinations has no data.")
+
+  # Merge on (nodes, model) to align comparable measurements
+  merged = pd.merge(
+    ref_df[[node_col, model_col, time_col]],
+    cmp_df[[node_col, model_col, time_col]],
+    on=[node_col, model_col],
+    suffixes=('_ref', '_cmp')
+  )
+
+  # Compute ratio
+  merged["ratio"] = merged[f"{time_col}_ref"] / merged[f"{time_col}_cmp"]
+
+  fig, ax = plt.subplots(figsize=figsize)
+
+  # Plot each model separately
+  for model, grp in merged.groupby(model_col):
+    ax.plot(
+      grp[node_col],
+      grp["ratio"],
+      label=model,
+      marker=marker
+    )
+
+  xticks = sorted(merged[node_col].unique())
+  ax.set_xticks(xticks)
+  ax.axhline(1.0, color='gray', linestyle='--', linewidth=1, label='Parity')
+  ax.set_xlabel("Number of Nodes")
+  ax.set_ylabel("Performance Ratio (ref / cmp)")
+  ax.set_title(f"Performance Ratio:\n{ref_cluster}/{ref_partition} vs. {cmp_cluster}/{cmp_partition}")
   ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
   ax.legend(title="Model")
   fig.tight_layout()
@@ -139,11 +219,27 @@ def main():
   model_color_map = dict(zip(models, itertools.cycle(color_cycle)))
 
   for cluster, partition in df.groupby(["cluster", "partition"]).groups.keys():
-    plot_scaling_by_model(df, cluster="haicgu", partition="eth")
+    plot_scaling_by_model(df, cluster=cluster, partition=partition, model_color_map=model_color_map)
     path = OUT_DIR / f'DNNProxy_{cluster}_{partition}.png'
     plt.savefig(path)
-    print(f'Plot saved to {path.resolve().absolute()}')
     plt.close()
+    print(f'Plot saved to {path.resolve().absolute()}')
+
+  combos = df[["cluster", "partition"]].drop_duplicates()
+  pairs = list(itertools.combinations(combos.itertuples(index=False, name=None), 2))
+  for (ref_cluster, ref_partition), (cmp_cluster, cmp_partition) in pairs:
+    try:
+        plot_performance_ratio(
+          df,
+          ref_cluster, ref_partition,
+          cmp_cluster, cmp_partition
+        )
+        filename = f"DNNProxy_ratio_{ref_cluster}_{ref_partition}_vs_{cmp_cluster}_{cmp_partition}.png"
+        plt.savefig(OUT_DIR / filename)
+        plt.close()
+        print(f"Saved: {filename}")
+    except ValueError as e:
+        print(f"Skipping {ref_cluster}/{ref_partition} vs {cmp_cluster}/{cmp_partition}: {e}")
 
 
 if __name__ == "__main__":
