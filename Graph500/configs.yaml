@@ -7,7 +7,6 @@ haicgu:
 
   default_conf:
     account: "dcn"
-    ntasks: 1
     cpus_per_task: 128
     gpus: 0
     time: "01:00:00"
@@ -20,3 +19,5 @@ haicgu:
   configs:
     - name: "{partition}_{nodes}nodes"
       partition: "cn-{partition}"
+      nodes: "{nodes}"
+      ntasks: "{nodes}"

@@ -30,6 +30,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <inttypes.h>
+#include <unistd.h>
 
 #define NUM_BFS_ROOTS 64
 int run_number = 0;
@@ -667,8 +668,14 @@ int main(int argc, char** argv) {
 	// Custom stats
 	fflush(stdout);
 	MPI_Barrier(MPI_COMM_WORLD);
-	print_custom_metrics(rank, size);
+	for (size_t r = 0; r < size; r++) {
+		if (rank == r) print_custom_metrics(rank, size);
+		fflush(stdout);
+		MPI_Barrier(MPI_COMM_WORLD);
+		sleep(1);
+	}
 	fflush(stdout);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	free(edge_counts);
 	free(bfs_times);
