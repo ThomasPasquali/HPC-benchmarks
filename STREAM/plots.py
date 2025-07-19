@@ -191,39 +191,39 @@ def _plot(df: pd.DataFrame, cores: List[int] | None, output: str | None) -> None
 # ──────────────────────────────────────────────────────────────────────────────
 
 def main(argv: list[str] | None = None) -> None:
-    parser = argparse.ArgumentParser(
-        description="Plot STREAM results from plain files **or** directly from SbatchMan jobs.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    subparsers = parser.add_subparsers(dest="mode", required=True)
+  parser = argparse.ArgumentParser(
+    description="Plot STREAM results from plain files **or** directly from SbatchMan jobs.",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+  )
+  subparsers = parser.add_subparsers(dest="mode", required=True)
 
-    # ── files sub-command ────────────────────────────────────────────────
-    files_p = subparsers.add_parser("files", help="Parse one or more STREAM output files")
-    files_p.add_argument("inputs", nargs="+", help="STREAM output text files")
-    files_p.add_argument("-H", "--hardware", nargs="+", help="Hardware label per input file")
-    files_p.add_argument("-o", "--output", help="Save figure instead of displaying it")
-    files_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
+  # ── files sub-command ────────────────────────────────────────────────
+  files_p = subparsers.add_parser("files", help="Parse one or more STREAM output files")
+  files_p.add_argument("inputs", nargs="+", help="STREAM output text files")
+  files_p.add_argument("-H", "--hardware", nargs="+", help="Hardware label per input file")
+  files_p.add_argument("-o", "--output", help="Save figure instead of displaying it")
+  files_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
 
-    # ── sbm sub-command ────────────────────────────────────────────────
-    sbm_p = subparsers.add_parser("sbm", help="Pull STREAM outputs from sbm jobs")
-    sbm_p.add_argument("-s", "--status", nargs="+", default=["COMPLETE"], help="Job status filter")
-    sbm_p.add_argument("-o", "--output", help="Save figure instead of displaying it")
-    sbm_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
+  # ── sbm sub-command ────────────────────────────────────────────────
+  sbm_p = subparsers.add_parser("sbm", help="Pull STREAM outputs from sbm jobs")
+  sbm_p.add_argument("-s", "--status", nargs="+", default=["COMPLETE"], help="Job status filter")
+  sbm_p.add_argument("-o", "--output", help="Save figure instead of displaying it")
+  sbm_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
 
-    args = parser.parse_args(argv)
-    cores = [int(c) for c in args.cores] if args.cores else None
+  args = parser.parse_args(argv)
+  cores = [int(c) for c in args.cores] if args.cores else None
 
-    if args.mode == "files":
-      labels = _infer_hardware_labels(args.inputs, args.hardware)
-      df = _build_dataframe_from_files(args.inputs, labels)
-      _plot(df, cores, args.output)
+  if args.mode == "files":
+    labels = _infer_hardware_labels(args.inputs, args.hardware)
+    df = _build_dataframe_from_files(args.inputs, labels)
+    _plot(df, cores, args.output)
 
-    elif args.mode == "sbm":
-      df = _build_dataframe_from_jobs(args.status)
-      _plot(df, cores, args.output)
+  elif args.mode == "sbm":
+    df = _build_dataframe_from_jobs(args.status)
+    _plot(df, cores, args.output)
 
 
 if __name__ == "__main__":
-    main()
+  main()
 
 # Run example: python3 plots.py sbm -s COMPLETED -o results/stream.png

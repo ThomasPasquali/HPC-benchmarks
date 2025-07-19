@@ -1,11 +1,13 @@
+sequential: true
+
 variables:
-  nodes: [1, 2] # , 4, 8]
-  partition: ["ib", "eth"]
+  nodes: [1, 2, 4] #, 8]
+  partition: ["eth", "ib"]
 
   bin: ["graph500_reference_bfs", "graph500_reference_bfs_smallbuf"] # ["graph500_reference_bfs_sssp_smallbuf", "graph500_reference_bfs_sssp"]
 
-  scale: [14, 16] #, 20]
-  edgefactor: [8, 16] #, 32, 64]
+  scale: [14, 16, 20]
+  edgefactor: [8, 16, 32, 64]
 
 command: "mpirun -np {nodes} ./bin/{bin} {scale} {edgefactor}"
 
