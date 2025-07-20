@@ -3,10 +3,23 @@ from pathlib import Path
 from statistics import geometric_mean, stdev
 import sys
 import sbatchman as sbm
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, List, Union, Tuple
 import re
+
+FONT_TITLE = 18
+FONT_AXES = 18
+FONT_TICKS = 16
+FONT_LEGEND = 12
+
+plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
+plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
+plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
+plt.rc('ytick', labelsize=FONT_TICKS)   # fontsize of the tick labels
+plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
+plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 
 OUT_DIR = Path('results')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -20,7 +33,7 @@ def plot_scaling_by_model(
   time_col: str = "geomean_time",
   time_std_col: str = "std_time",
   model_col: str = "model",
-  figsize: tuple = (8, 6),
+  figsize: tuple = (10, 6),
   marker: str = "o"
 ) -> plt.Axes:
   """
@@ -108,8 +121,9 @@ def plot_performance_ratio(
   node_col: str = "nodes",
   time_col: str = "geomean_time",
   model_col: str = "model",
-  figsize: tuple = (8, 6),
-  marker: str = "o"
+  figsize: tuple = (10, 6),
+  marker: str = "o",
+  is_barplot=False,
 ) -> plt.Axes:
   """
   Plot performance ratio (ref_time / cmp_time) for each model over node counts.
@@ -155,16 +169,40 @@ def plot_performance_ratio(
   fig, ax = plt.subplots(figsize=figsize)
 
   # Plot each model separately
-  for model, grp in merged.groupby(model_col):
-    ax.plot(
-      grp[node_col],
-      grp["ratio"],
-      label=model,
-      marker=marker
-    )
+  if is_barplot:
+    models = merged[model_col].unique()
+    num_models = len(models)
+    bar_width = 0.8 / num_models  # Total width for all bars per group is 0.8
 
-  xticks = sorted(merged[node_col].unique())
-  ax.set_xticks(xticks)
+    node_vals = sorted(merged[node_col].unique())
+    node_pos = np.arange(len(node_vals))  # Use positions as x-axis for bar alignment
+
+    for i, model in enumerate(models):
+      grp = merged[merged[model_col] == model]
+      # Align grp data with node positions
+      grp = grp.set_index(node_col).reindex(node_vals).reset_index()
+
+      ax.bar(
+        node_pos + i * bar_width,
+        grp["ratio"],
+        width=bar_width,
+        label=model,
+      )
+
+    ax.set_xticks(node_pos + bar_width * (num_models - 1) / 2)
+    ax.set_xticklabels(node_vals)
+  else:
+    for model, grp in merged.groupby(model_col):
+      ax.plot(
+        grp[node_col],
+        grp["ratio"],
+        label=model,
+        marker=marker
+      )
+
+    xticks = sorted(merged[node_col].unique())
+    ax.set_xticks(xticks)
+    
   ax.axhline(1.0, color='gray', linestyle='--', linewidth=1, label='Parity')
   ax.set_xlabel("Number of Nodes")
   ax.set_ylabel(f"Performance Ratio ({ref_cluster}-{ref_partition} / {cmp_cluster}-{cmp_partition})")
@@ -236,7 +274,7 @@ def main():
         })
 
     df = pd.DataFrame(data)
-    df.to_csv(OUT_DIR / 'data.csv')
+    df.to_csv(OUT_DIR / 'dnnproxies_data.csv')
 
   print(df)
 
@@ -261,6 +299,17 @@ def main():
         cmp_cluster, cmp_partition
       )
       filename = f"DNNProxy_ratio_{ref_cluster}_{ref_partition}_vs_{cmp_cluster}_{cmp_partition}.png"
+      plt.savefig(OUT_DIR / filename)
+      plt.close()
+      print(f"Plot saved to {filename}")
+
+      plot_performance_ratio(
+        df,
+        ref_cluster, ref_partition,
+        cmp_cluster, cmp_partition,
+        is_barplot=True,
+      )
+      filename = f"DNNProxy_ratio_barplot_{ref_cluster}_{ref_partition}_vs_{cmp_cluster}_{cmp_partition}.png"
       plt.savefig(OUT_DIR / filename)
       plt.close()
       print(f"Plot saved to {filename}")
