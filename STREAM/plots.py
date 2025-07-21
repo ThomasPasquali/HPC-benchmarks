@@ -54,6 +54,7 @@ _RATE_RE = re.compile(rf"^({'|'.join(FUNCTIONS)}):\s+([0-9]+(?:\.[0-9]+)?)")
 _THREADS_RE = re.compile(r"Number of Threads counted\s*=\s*(\d+)")
 _JOB_RE = re.compile(r"(\w+)_(\d+)cpus")  # captures hw and core count
 
+
 OUT_DIR = Path('results')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -263,7 +264,7 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
     ax.set_title(func)
     ax.set_xlabel("CPU cores")
     ax.set_ylabel("Bandwidth [GB/s]")
-    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.grid(True, linestyle="-", alpha=0.8)
     ax.legend(loc='upper left')
 
     ## Add zoom
@@ -278,6 +279,9 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
       zoom_ax_kwargs={'grid': True, 'set_xticks': [2**p for p in range(8) if 2**p <= zoom_cores_limit]}
     )
     zoom_ax.yaxis.tick_right()
+    for dir in ['top', 'right', 'bottom', 'left']:
+      zoom_ax.spines[dir].set_linestyle(":")
+      zoom_ax.spines[dir].set_edgecolor("red")
 
   fig.suptitle("STREAM - Memory Bandwidth - Scaling", fontsize=17, y=0.97)
   fig.tight_layout() # (rect=[0, 0, 1, 0.95])

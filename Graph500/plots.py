@@ -407,6 +407,7 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
     ]
 
     # Optionally remove outliers
+    subset_full = subset
     if REMOVE_OUTLIERS:
       subset = remove_outliers_iqr(subset, "mean_barrier_time")
       # We don't filter "mean_packet_size" since it’s now plotted as a barplot over means
@@ -416,11 +417,12 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
 
     # Left: boxplot of mean_barrier_time
     sns.boxplot(
-      data=subset,
+      data=subset_full,
       x="impl",
       y="mean_barrier_time",
       hue="cluster_partition",
-      ax=axes[0]
+      ax=axes[0],
+      showfliers=not REMOVE_OUTLIERS,
     )
     axes[0].set_title("Avg Barrier Time (arith. mean)")
     axes[0].set_ylabel("Avg Barrier Time [s]")

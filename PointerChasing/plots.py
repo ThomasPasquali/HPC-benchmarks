@@ -1,145 +1,191 @@
-#!/usr/bin/env python3
-"""
-Generate the pointer-chasing benchmark plots originally produced with gnuplot.
-
-• random-chase.png - avg access time vs. memory area (log-scaled X)   with L1/L2/L3 cache size markers.
-
-• linear-chase.png - avg access time vs. stride size.
-
-• fused-linear-chase.png - data-access bandwidth vs. stride for fuse factors 1-8.
-"""
-
+import itertools
 from pathlib import Path
 import argparse
-from typing import List
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import sbatchman as sbm
 
-# [L1, L2, L3] .... kind of ...
+
+FONT_TITLE = 18
+FONT_AXES = 18
+FONT_TICKS = 16
+FONT_LEGEND = 14
+
+plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
+plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
+plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
+plt.rc('ytick', labelsize=FONT_TICKS)   # fontsize of the tick labels
+plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
+plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
+
+
 CACHE_SIZES = {
-  'pioneer':    [64 * 1024, 1 * 1024 * 1024, 64 * 1024 * 1024],
-  'bananaf3':   [32 * 1024, 512 * 1024, 512 * 1024],
-  'arriesgado': [64 * 1024, 2 * 1024 * 1024, 0],
+  'pioneer':    [(64 * 1024, 'L1 cache'), (1 * 1024 * 1024, 'L2 cache'),  (64 * 1024 * 1024, 'L3 cache')],
+  'bananaf3':   [(32 * 1024, 'L1 cache'), (512 * 1024     , 'L2 cache'),  (512 * 1024,       'TCM')     ],
+  'arriesgado': [(64 * 1024, 'L1 cache'), (2 * 1024 * 1024, 'L2 cache'),  (0,                '')        ],
 }
 
 
-def plot_random_chase(src: Path, dst: Path, hw_name: str) -> None:
-  data = np.genfromtxt(src, skip_header=2, usecols=(0, 1), unpack=True)
-  x, y = data[0], data[1]
-
-  fig, ax = plt.subplots(figsize=(9, 5), dpi=100)
-  ax.plot(x, y, marker="o", markersize=3, linewidth=1, label=hw_name)
-
-  # log-scale on X
-  ax.set_xscale("log")
-  ax.set_xlabel("memory area in bytes")
-  ax.set_ylabel("avg access time in ns")
-  ax.set_title("Access times in dependence of memory area")
-
-  # draw vertical cache-size markers (blue)
-  l1, l2, l3 = CACHE_SIZES[hw_name]
-  y_max = y.max()
-  for pos in (l1, l2, l3):
-    if pos > 0:
-      ax.axvline(x=pos, ymin=0, ymax=1, linewidth=1)
-
-  ax.set_ylim(0, y_max * 1.05)
-  ax.legend()
-  fig.tight_layout()
-  fig.savefig(dst)
-  print(f'Plot "random-chase" saved to {dst.resolve().absolute()}')
-  plt.close(fig)
+def parse_random_chase(path, hw_name):
+  data = np.genfromtxt(path, skip_header=2, usecols=(0, 1))
+  return pd.DataFrame(data, columns=['x', 'y']).assign(program='random-chase', hw=hw_name)
 
 
-def plot_linear_chase(src: Path, dst: Path, hw_name: str) -> None:
-  data = np.genfromtxt(src, skip_header=2, usecols=(0, 1), unpack=True)
-  x, y = data[0], data[1]
-
-  fig, ax = plt.subplots(figsize=(9, 5), dpi=100)
-  ax.plot(x, y, marker="o", markersize=3, linewidth=1, label=hw_name)
-
-  ax.set_xlabel("stride in bytes")
-  ax.set_ylabel("avg access time in ns")
-  ax.set_title("Access times in dependence of stride")
-  ax.legend()
-  fig.tight_layout()
-  fig.savefig(dst)
-  print(f'Plot "linear-chase" saved to {dst.resolve().absolute()}')
-  plt.close(fig)
+def parse_linear_chase(path, hw_name):
+  data = np.genfromtxt(path, skip_header=2, usecols=(0, 1))
+  return pd.DataFrame(data, columns=['x', 'y']).assign(program='linear-chase', hw=hw_name)
 
 
-def plot_fused_linear_chase(src: Path, dst: Path, hw_name: str) -> None:
+def parse_fused_linear_chase(path, hw_name):
   try:
-    raw = np.genfromtxt(src, skip_header=4)
+    raw = np.genfromtxt(path, skip_header=4)
   except ValueError:
-    raw = np.genfromtxt(src, skip_header=4, skip_footer=1)
-  x = raw[:, 0]
-  print(x)
+    raw = np.genfromtxt(path, skip_header=4, skip_footer=1)
 
-  fig, ax = plt.subplots(figsize=(15, 9), dpi=100)
-  for fuse in range(8):  # columns 2-9 = fuse 1-8
+  stride = raw[:, 0]
+  dfs = []
+  for fuse in range(8):  # fuse factors 1-8
     y = raw[:, fuse + 1]
-    ax.plot(x, y, marker="o", markersize=3, linewidth=1, label=f"fuse {fuse+1}")
+    df = pd.DataFrame({
+      'x': stride,
+      'y': y,
+      'fuse': fuse + 1,
+      'program': 'fused-linear-chase',
+      'hw': hw_name
+    })
+    dfs.append(df)
+  return pd.concat(dfs, ignore_index=True)
 
-  ax.set_xlabel("stride in bytes")
-  ax.set_ylabel("data access speed in GiB/s")
-  ax.set_title(f"Data access speeds in dependence of stride and fuse {hw_name}")
+
+PARSERS = {
+  'random-chase': parse_random_chase,
+  'linear-chase': parse_linear_chase,
+  'fused-linear-chase': parse_fused_linear_chase
+}
+
+
+def generate_dataframe_from_jobs(jobs):
+  dfs = []
+  for job in jobs:
+    prog = job.tag
+    hw = job.config_name
+    if prog not in PARSERS:
+      print(f"Skipping unrecognized program: {prog}")
+      continue
+    df = PARSERS[prog](job.get_stdout_path(), hw)
+    dfs.append(df)
+  return pd.concat(dfs, ignore_index=True)
+
+
+def plot_random(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
+  fig, ax = plt.subplots(figsize=(9, 5), dpi=100)
+  
+  occupied_cache_size_text_pos = []
+  for hw_name, group in df.groupby("hw"):
+    ax.plot(group['x'], group['y'], marker="o", markersize=3, linewidth=1, label=hw_name, color=hws_color_map[hw_name])
+    l1, l2, l3 = CACHE_SIZES.get(hw_name, ((0,''), (0,''), (0,'')))
+    for pos, name in l1, l2, l3:
+      if pos > 0:
+        ax.axvline(x=pos, linestyle="--", color=hws_color_map[hw_name], linewidth=0.9)
+        occupied = any([abs(pos-p)<2048 for p in occupied_cache_size_text_pos])
+        ax.text(pos*(1.03 if occupied else 0.78), df['y'].max()/1.7, f'{hw_name} {name}', rotation=90, color=hws_color_map[hw_name])
+        occupied_cache_size_text_pos.append(pos)
+
+  ax.set_xscale("log", base=2)
+  ax.set_xlabel("Memory Area [Bytes]")
+  ax.set_ylabel("Avg access time [ns]")
+  ax.set_title("Access Times vs Memory Area")
+  ax.grid(True, linestyle="-", alpha=0.8)
   ax.legend()
   fig.tight_layout()
   fig.savefig(dst)
-  print(f'Plot "fused-linear-chase" saved to {dst.resolve().absolute()}')
+  print(f'Plot saved to {dst}')
   plt.close(fig)
 
-# =====================================================
 
-def filter_jobs(jobs: List[sbm.Job]) -> List[sbm.Job]:
-  filtered_jobs = []
-  for job in jobs:
-    if job.status in ['COMPLETED']:
-      filtered_jobs.append(job)
-  return filtered_jobs
+def plot_linear(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
+  fig, ax = plt.subplots(figsize=(9, 5), dpi=100)
+  for hw_name, group in df.groupby("hw"):
+    ax.plot(group['x'], group['y'], marker="o", markersize=3, linewidth=1, label=hw_name, color=hws_color_map[hw_name])
 
-# =====================================================
+  ax.set_xlabel("Stride [Bytes]")
+  ax.set_ylabel("Avg access time [ns]")
+  ax.set_title("Access Time vs Stride")
+  ax.grid(True, linestyle="-", alpha=0.6)
+  ax.legend()
+  fig.tight_layout()
+  fig.savefig(dst)
+  print(f'Plot saved to {dst}')
+  plt.close(fig)
 
-def main() -> None:
-  parser = argparse.ArgumentParser(description="Generate pointer-chase plots.")
-  parser.add_argument("--output-dir", default=Path("./results"), type=Path, help="where PNGs are written")
+
+def plot_fused(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
+  fig, ax = plt.subplots(figsize=(15, 9), dpi=100)
+  for (hw_name, fuse), group in df.groupby(["hw", "fuse"]):
+    label = f"{hw_name} - Fuse {int(fuse)}"
+    ax.plot(group['x'], group['y'], marker=hws_marker_map[hw_name], markersize=3, linewidth=1, label=label, linestyle=hws_linestyle_map[hw_name], color=fuse_color_map[fuse])
+
+  ax.set_xlabel("Stride [Bytes]")
+  ax.set_ylabel("Bandwidth [GiB/s]")
+  ax.set_title("Bandwidth varying Stride and Fuse")
+  ax.grid(True, linestyle="-", alpha=0.8)
+  ax.legend()
+  fig.tight_layout()
+  fig.savefig(dst)
+  print(f'Plot saved to {dst}')
+  plt.close(fig)
+
+
+PLOTTERS = {
+  'random-chase': plot_random,
+  'linear-chase': plot_linear,
+  'fused-linear-chase': plot_fused
+}
+
+
+def main():
+  parser = argparse.ArgumentParser()
+  parser.add_argument("--output-dir", type=Path, default=Path("./results"))
+  parser.add_argument("--csv", type=Path, help="Optional CSV file to read data from")
   args = parser.parse_args()
 
-  outdir: Path = args.output_dir
-  outdir.mkdir(parents=True, exist_ok=True)
+  args.output_dir.mkdir(parents=True, exist_ok=True)
 
-  # jobs = filter_jobs(sbm.jobs_list(from_active=True, from_archived=True))
-  jobs = sbm.jobs_list(from_active=False, from_archived=True)
-  plot_functions = {
-    "linear-chase": plot_linear_chase,
-    "random-chase": plot_random_chase,
-    "fused-linear-chase" : plot_fused_linear_chase,
-  }
-  done_plots = {
-    "linear-chase": False,
-    "random-chase": False,
-    "fused-linear-chase" : False,
-  }
-  for job in jobs:
-    program = job.tag
+  if args.csv:
+    print(f"Reading data from CSV: {args.csv}")
+    df = pd.read_csv(args.csv)
+  else:
+    print("Generating data from jobs...")
+    jobs = sbm.jobs_list(from_active=False, from_archived=True)
+    df = generate_dataframe_from_jobs(jobs)
+    path = args.output_dir / 'pointer_chasing_data.csv'
+    df.to_csv(path, index=False)
+    print(f"Saved dataframe to CSV: {path}")
+    
+  color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+  hws_color_map = dict(zip(df['hw'].unique(), itertools.cycle(color_cycle)))
+  fuse_color_map = dict(zip(df['fuse'].unique(), itertools.cycle(color_cycle)))
+  
+  linestyle_cycle = itertools.cycle(["-", "--", "-.", ":"])
+  hws_linestyle_map = dict(zip(df['hw'].unique(), linestyle_cycle))
+  
+  marker_cycle = itertools.cycle(["o", "v", "P", "X"])
+  hws_marker_map = dict(zip(df['hw'].unique(), marker_cycle))
 
-    if program not in plot_functions.keys():
-      print(f'Unrecognized program "{program}, skipping"')
+  for program, plot_func in PLOTTERS.items():
+    df_subset = df[df['program'] == program]
+    if df_subset.empty:
       continue
 
-    if not done_plots[program]:
-      print('\n\n')
-      print('='*50)
-      print(job.get_stdout())
-      hw_name = job.config_name
-      plot_functions[program](job.get_stdout_path(), outdir / f'{hw_name}_{program}.png', hw_name)
-    else:
-      print(f'Plot for {program} already generated from another job, skipping')
-      continue
+    # Combined plot over all hardware configs
+    plot_func(df_subset, args.output_dir / f"combined_{program}.png", hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map)
 
-  print("✔ Plots written to", outdir.resolve().absolute())
+    # # Individual plots per hardware
+    # for hw, hw_df in df_subset.groupby("hw"):
+    #   plot_func(hw_df, args.output_dir / f"{hw}_{program}.png", hws_color_map, hws_linestyle_map, fuse_color_map)
+
+  print("✔ All plots generated.")
 
 
 if __name__ == "__main__":
