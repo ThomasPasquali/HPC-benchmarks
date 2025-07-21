@@ -226,67 +226,67 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
     'classic': 'x',
   }
 
-  # TEPS and CUT_TEPS vs Nodes
-  for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
-    plt.figure(figsize=(12, 6))
+  # # TEPS and CUT_TEPS vs Nodes
+  # for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
+  #   plt.figure(figsize=(12, 6))
 
-    x_ticks_nodes = set()
-    for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
-      impl_group_sorted = impl_group.sort_values('nodes')
-      nodes = impl_group_sorted['nodes']
-      teps_vals = impl_group_sorted['teps']
-      cut_teps_vals = impl_group_sorted['cut_teps']
+  #   x_ticks_nodes = set()
+  #   for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
+  #     impl_group_sorted = impl_group.sort_values('nodes')
+  #     nodes = impl_group_sorted['nodes']
+  #     teps_vals = impl_group_sorted['teps']
+  #     cut_teps_vals = impl_group_sorted['cut_teps']
 
-      # linestyle = next(line_styles)
-      linestyle = line_styles.get(f'{cluster}-{partition}', ':')
-      marker = markers.get(impl, 's')
-      label_base = f"{cluster}-{partition}-{impl}"
-      plt.plot(nodes, teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} TEPS")
-      plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
-      x_ticks_nodes |= set(nodes.values)
+  #     # linestyle = next(line_styles)
+  #     linestyle = line_styles.get(f'{cluster}-{partition}', ':')
+  #     marker = markers.get(impl, 's')
+  #     label_base = f"{cluster}-{partition}-{impl}"
+  #     plt.plot(nodes, teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} TEPS")
+  #     plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
+  #     x_ticks_nodes |= set(nodes.values)
 
-    plt.title(f"TEPS and CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
-    plt.xlabel("Nodes")
-    plt.ylabel("TEPS and CUT_TEPS")
-    plt.xticks(sorted(list(x_ticks_nodes)))
-    plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-    plt.legend(title="Cluster-Partition-Implementation Metric")
-    plt.tight_layout()
-    path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
-    path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(path)
-    print(f'Plot saved to {path}')
-    plt.close()
+  #   plt.title(f"TEPS and CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
+  #   plt.xlabel("Nodes")
+  #   plt.ylabel("TEPS and CUT_TEPS")
+  #   plt.xticks(sorted(list(x_ticks_nodes)))
+  #   plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+  #   plt.legend(title="Cluster-Partition-Implementation Metric")
+  #   plt.tight_layout()
+  #   path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
+  #   path.parent.mkdir(parents=True, exist_ok=True)
+  #   plt.savefig(path)
+  #   print(f'Plot saved to {path}')
+  #   plt.close()
 
-  # ONLY CUT_TEPS vs Nodes
-  for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
-    plt.figure(figsize=(12, 6))
+  # # ONLY CUT_TEPS vs Nodes
+  # for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
+  #   plt.figure(figsize=(12, 6))
 
-    x_ticks_nodes = set()
-    for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
-      impl_group_sorted = impl_group.sort_values('nodes')
-      nodes = impl_group_sorted['nodes']
-      cut_teps_vals = impl_group_sorted['cut_teps']
+  #   x_ticks_nodes = set()
+  #   for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
+  #     impl_group_sorted = impl_group.sort_values('nodes')
+  #     nodes = impl_group_sorted['nodes']
+  #     cut_teps_vals = impl_group_sorted['cut_teps']
 
-      # linestyle = next(line_styles)
-      linestyle = line_styles.get(f'{cluster}-{partition}', ':')
-      marker = markers.get(impl, 's')
-      label_base = f"{cluster}-{partition}-{impl}"
-      plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
-      x_ticks_nodes |= set(nodes.values)
+  #     # linestyle = next(line_styles)
+  #     linestyle = line_styles.get(f'{cluster}-{partition}', ':')
+  #     marker = markers.get(impl, 's')
+  #     label_base = f"{cluster}-{partition}-{impl}"
+  #     plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
+  #     x_ticks_nodes |= set(nodes.values)
 
-    plt.title(f"CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
-    plt.xlabel("Nodes")
-    plt.ylabel("CUT_TEPS")
-    plt.xticks(sorted(list(x_ticks_nodes)))
-    plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-    plt.legend(title="Cluster-Partition-Implementation Metric")
-    plt.tight_layout()
-    path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
-    path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(path)
-    print(f'Plot saved to {path}')
-    plt.close()
+  #   plt.title(f"CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
+  #   plt.xlabel("Nodes")
+  #   plt.ylabel("CUT_TEPS")
+  #   plt.xticks(sorted(list(x_ticks_nodes)))
+  #   plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+  #   plt.legend(title="Cluster-Partition-Implementation Metric")
+  #   plt.tight_layout()
+  #   path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
+  #   path.parent.mkdir(parents=True, exist_ok=True)
+  #   plt.savefig(path)
+  #   print(f'Plot saved to {path}')
+  #   plt.close()
 
   # Boxplot of mean barrier time per partition-impl, grouped by (scale, edgefactor)
   # for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
@@ -327,25 +327,94 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
   #   print(f'Plot saved to {path}')
   #   plt.close()
 
+  ## OLD VERSION of barrier time and avg packet size boxplots
+  # df_filtered = df[df["nodes"] > 2]
+  # # Ensure (cluster, partition) is a combined label for hue
+  # df_filtered["cluster_partition"] = df_filtered["cluster"] + "-" + df_filtered["partition"]
 
-  df_filtered = df[df["nodes"] > 2]
-  # Ensure (cluster, partition) is a combined label for hue
+  # # Get all unique combinations of (scale, edgefactor)
+  # group_keys = df_filtered[["scale", "edgefactor"]].drop_duplicates()
+  # for _, row in group_keys.iterrows():
+  #   scale = row["scale"]
+  #   edgefactor = row["edgefactor"]
+
+  #   # Filter for this group
+  #   subset = df_filtered[(df_filtered["scale"] == scale) & (df_filtered["edgefactor"] == edgefactor)]
+
+  #   # Create the figure with two side-by-side plots
+  #   fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=False)
+  #   fig.suptitle(f"Scale: {scale}, Edgefactor: {edgefactor}", fontsize=16)
+
+  #   # Left: mean_barrier_time
+  #   sns.boxplot(
+  #     data=subset,
+  #     x="impl",
+  #     y="mean_barrier_time",
+  #     hue="cluster_partition",
+  #     ax=axes[0]
+  #   )
+  #   axes[0].set_title("Avg Barrier Time (arith. mean)")
+  #   axes[0].set_ylabel("Avg Barrier Time [s]")
+  #   axes[0].set_xlabel("Implementation")
+  #   axes[0].legend()
+
+  #   # Right: mean_packet_size
+  #   sns.boxplot(
+  #     data=subset,
+  #     x="impl",
+  #     y="mean_packet_size",
+  #     hue="cluster_partition",
+  #     ax=axes[1]
+  #   )
+  #   axes[1].set_title("Avg. Packet Size (arith. mean)")
+  #   axes[1].set_ylabel("Avg. Packet Size [Bytes]")
+  #   axes[1].set_xlabel("Implementation")
+  #   axes[1].legend()
+
+  #   plt.tight_layout()  # Leave space for the legend
+  #   path = OUT_DIR / 'barrier_and_avgsize' / f'Graph500_barrier_avgpacketsize_boxplot_s{scale}_ef{edgefactor}.png'
+  #   path.parent.mkdir(parents=True, exist_ok=True)
+  #   plt.savefig(path)
+  #   print(f'Plot saved to {path}')
+  #   plt.close()
+
+  # Flag to toggle outlier removal
+  REMOVE_OUTLIERS = False
+
+  # Filter input DataFrame
+  df_filtered = df[df["nodes"] > 2].copy()
   df_filtered["cluster_partition"] = df_filtered["cluster"] + "-" + df_filtered["partition"]
 
+  # Function to remove outliers using IQR method
+  def remove_outliers_iqr(data, column):
+    Q1 = data[column].quantile(0.25)
+    Q3 = data[column].quantile(0.75)
+    IQR = Q3 - Q1
+    return data[(data[column] >= Q1 - 1.5 * IQR) & (data[column] <= Q3 + 1.5 * IQR)]
+
   # Get all unique combinations of (scale, edgefactor)
-  group_keys = df_filtered[["scale", "edgefactor"]].drop_duplicates()
+  group_keys = df_filtered[["scale", "edgefactor", "nodes"]].drop_duplicates()
+
   for _, row in group_keys.iterrows():
     scale = row["scale"]
     edgefactor = row["edgefactor"]
+    nodes = row["nodes"]
 
-    # Filter for this group
-    subset = df_filtered[(df_filtered["scale"] == scale) & (df_filtered["edgefactor"] == edgefactor)]
+    subset = df_filtered[
+      (df_filtered["scale"] == scale)
+      & (df_filtered["edgefactor"] == edgefactor)
+      & (df_filtered["nodes"] == nodes)
+    ]
 
-    # Create the figure with two side-by-side plots
+    # Optionally remove outliers
+    if REMOVE_OUTLIERS:
+      subset = remove_outliers_iqr(subset, "mean_barrier_time")
+      # We don't filter "mean_packet_size" since it’s now plotted as a barplot over means
+
     fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=False)
-    fig.suptitle(f"Scale: {scale}, Edgefactor: {edgefactor}", fontsize=16)
+    fig.suptitle(f"Nodes: {nodes}, Scale: {scale}, Edgefactor: {edgefactor}", fontsize=18)
 
-    # Left: mean_barrier_time
+    # Left: boxplot of mean_barrier_time
     sns.boxplot(
       data=subset,
       x="impl",
@@ -358,21 +427,39 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
     axes[0].set_xlabel("Implementation")
     axes[0].legend()
 
-    # Right: mean_packet_size
-    sns.boxplot(
-      data=subset,
+    # Right: barplot of mean_packet_size (mean ± std)
+    grouped = subset.groupby(["impl", "cluster_partition"])["mean_packet_size"].agg(['mean', 'std']).reset_index()
+    sns.barplot(
+      data=grouped,
       x="impl",
-      y="mean_packet_size",
+      y="mean",
       hue="cluster_partition",
-      ax=axes[1]
+      ax=axes[1],
+      capsize=0.1,
+      err_kws={'linewidth': 1.5},
     )
-    axes[1].set_title("Avg. Packet Size (arith. mean)")
+    # Add manual error bars aligned with bar centers
+    # We retrieve bar locations from the bar containers
+    for bars, (_, group) in zip(axes[1].containers, grouped.groupby("cluster_partition")):
+      for bar, (_, row) in zip(bars, group.iterrows()):
+        height = bar.get_height()
+        axes[1].errorbar(
+          x=bar.get_x() + bar.get_width() / 2,
+          y=height,
+          yerr=row["std"],
+          fmt='none',
+          c='black',
+          capsize=4,
+          linewidth=1
+        )
+
+    axes[1].set_title("Avg. Packet Size (mean ± std)")
     axes[1].set_ylabel("Avg. Packet Size [Bytes]")
     axes[1].set_xlabel("Implementation")
     axes[1].legend()
 
-    plt.tight_layout()  # Leave space for the legend
-    path = OUT_DIR / 'barrier_and_avgsize' / f'Graph500_barrier_avgpacketsize_boxplot_s{scale}_ef{edgefactor}.png'
+    plt.tight_layout()
+    path = OUT_DIR / 'barrier_and_avgsize' / f'Graph500_barrier_avgpacketsize{"_noutliers" if REMOVE_OUTLIERS else ""}_s{scale}_ef{edgefactor}_n{nodes}.png'
     path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(path)
     print(f'Plot saved to {path}')

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 plot_stream.py — Visualise STREAM benchmark results from **files** *or* **sbm jobs**.
 
@@ -11,14 +10,13 @@ plot_stream.py — Visualise STREAM benchmark results from **files** *or* **sbm 
 Example - classic file mode
 ───────────────────────────
 ```bash
-python plot_stream.py files A100_1c.txt A100_32c.txt \
-                         -H A100 A100 -o stream.png
+python plot_stream.py files A100_1c.txt A100_32c.txt -H A100 A100
 ```
 
 Example - sbm mode (no filenames needed!)
 ─────────────────────────────────────────
 ```bash
-python plot_stream.py sbm -s COMPLETE -o stream.png
+python plot_stream.py sbm -s COMPLETE
 ```
 This walks over
 ```python
@@ -26,7 +24,7 @@ jobs = sbm.jobs_list(from_active=True, from_archived=True,
                      status=["COMPLETE"])
 ```
 then, for every job whose ``config_name`` looks like
-``HWName_16cpus`` (regex ``(\w+)_(\d+)cpus``), it extracts the STREAM metrics
+``HWName_16cpus`` (regex ``(\\w+)_(\\d+)cpus``), it extracts the STREAM metrics
 straight from ``job.get_stdout()``.
 
 Dependencies
@@ -34,8 +32,6 @@ Dependencies
 Python ≥3.9, pandas, matplotlib, and of course your in-house ``sbm`` package.
 Install the PyPI bits with: ``pip install pandas matplotlib``.
 """
-
-from __future__ import annotations
 
 import argparse
 import os
@@ -46,14 +42,33 @@ from typing import List
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
+from matplotlib.patches import Rectangle
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Regex patterns and constants
 # ──────────────────────────────────────────────────────────────────────────────
+
 FUNCTIONS = ["Copy", "Scale", "Add", "Triad"]
 _RATE_RE = re.compile(rf"^({'|'.join(FUNCTIONS)}):\s+([0-9]+(?:\.[0-9]+)?)")
 _THREADS_RE = re.compile(r"Number of Threads counted\s*=\s*(\d+)")
 _JOB_RE = re.compile(r"(\w+)_(\d+)cpus")  # captures hw and core count
+
+OUT_DIR = Path('results')
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+FONT_TITLE = 18
+FONT_AXES = 18
+FONT_TICKS = 16
+FONT_LEGEND = 14
+
+plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
+plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
+plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
+plt.rc('ytick', labelsize=FONT_TICKS)   # fontsize of the tick labels
+plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
+plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Low-level parsing helpers
@@ -149,7 +164,79 @@ def _build_dataframe_from_jobs(status: List[str]) -> pd.DataFrame:
 # Plotting helper
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _plot(df: pd.DataFrame, cores: List[int] | None, output: str | None) -> None:
+def add_zoom_inset(
+  ax, zoom_region, inset_position=(0.6, 0.6, 0.3, 0.3),
+  draw_rect=True, rect_kwargs=None, zoom_ax_kwargs=None
+):
+  """
+  Adds a zoomed inset with full size and position control using inset_axes.
+
+  Parameters:
+  - ax: matplotlib.axes.Axes
+      The main axes.
+  - zoom_region: tuple (x1, x2, y1, y2)
+      Limits of the region to zoom into.
+  - inset_position: tuple (x0, y0, width, height)
+      Inset position in axes fraction coordinates (not figure coords).
+  - draw_rect: bool
+      Draw a dashed rectangle on the main plot to show zoom region.
+  - rect_kwargs: dict
+      Styling for the zoom rectangle.
+  - zoom_ax_kwargs: dict
+      Dict of method calls on the inset axes.
+  
+  Returns:
+  - axins: The inset axes object.
+  """
+  rect_kwargs = rect_kwargs or {'edgecolor': 'black', 'linestyle': 'dashed', 'linewidth': 1}
+  zoom_ax_kwargs = zoom_ax_kwargs or {}
+
+  # Create inset axes
+  bbox = inset_position
+  axins = inset_axes(
+    ax,
+    width="100%", height="100%",
+    bbox_to_anchor=bbox,
+    bbox_transform=ax.transAxes,
+    loc='lower left',
+    borderpad=0
+  )
+
+  # Set zoom limits
+  x1, x2, y1, y2 = zoom_region
+  axins.set_xlim(x1, x2)
+  axins.set_ylim(y1, y2)
+
+  # Copy each line fully
+  for line in ax.get_lines():
+    axins.plot(
+      line.get_xdata(),
+      line.get_ydata(),
+      color=line.get_color(),
+      linestyle=line.get_linestyle(),
+      linewidth=line.get_linewidth(),
+      marker=line.get_marker(),
+      markersize=line.get_markersize(),
+      markeredgecolor=line.get_markeredgecolor(),
+      markerfacecolor=line.get_markerfacecolor(),
+      alpha=line.get_alpha(),
+      label=line.get_label(),
+      zorder=line.get_zorder()
+    )
+
+  # Apply additional inset customizations
+  for method, args in zoom_ax_kwargs.items():
+    getattr(axins, method)(args) if isinstance(args, (list, tuple)) else getattr(axins, method)(args)
+
+  # Draw rectangle on main plot
+  if draw_rect:
+    rect = Rectangle((x1, y1), x2 - x1, y2 - y1, fill=False, **rect_kwargs)
+    ax.add_patch(rect)
+
+  return axins
+
+
+def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
   marker_cycle = ["o", "s", "^", "d", "x", "P", "*", "v", ">"]
 
   fig, axes = plt.subplots(2, 2, figsize=(13, 9), sharey=False)
@@ -161,30 +248,44 @@ def _plot(df: pd.DataFrame, cores: List[int] | None, output: str | None) -> None
     if cores:
       func_df = func_df[func_df['cores'].isin(cores)]
 
+    func_df['bandwidth_GBps'] = func_df['bandwidth_MBps'] / 1e3
+
     for j, (hw, group) in enumerate(func_df.groupby("hardware", sort=False)):
       group_sorted = group.sort_values("cores")
       ax.plot(
         group_sorted["cores"],
-        group_sorted["bandwidth_MBps"],
+        group_sorted["bandwidth_GBps"],
         label=hw,
         marker=marker_cycle[j % len(marker_cycle)],
         linewidth=1.8,
       )
+    ax.set_xticks(list(func_df['cores'].unique()))
     ax.set_title(func)
     ax.set_xlabel("CPU cores")
-    ax.set_ylabel("Bandwidth [MB/s]")
+    ax.set_ylabel("Bandwidth [GB/s]")
     ax.grid(True, linestyle="--", alpha=0.5)
-    ax.legend(fontsize="small")
+    ax.legend(loc='upper left')
 
-  fig.suptitle("STREAM - Memory-Bandwidth Scaling", fontsize=17, y=0.97)
-  fig.tight_layout(rect=[0, 0, 1, 0.95])
+    ## Add zoom
+    zoom_cores_limit = 8
+    max_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].max()
+    min_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].min()
+    zoom_ax = add_zoom_inset(
+      ax,
+      zoom_region=(0.0, 9.0, min_y*0.96, max_y*1.04),
+      inset_position=(0.3, 0.1, 0.6, 0.72),  # x0, y0, width, height (ALL in percentage wrt ax size)
+      rect_kwargs={'edgecolor': 'red', 'linestyle': '--', 'linewidth': 1},
+      zoom_ax_kwargs={'grid': True, 'set_xticks': [2**p for p in range(8) if 2**p <= zoom_cores_limit]}
+    )
+    zoom_ax.yaxis.tick_right()
 
-  if output:
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(output, dpi=300)
-    print(f"[ OK ] figure saved to {output}")
-  else:
-    plt.show()
+  fig.suptitle("STREAM - Memory Bandwidth - Scaling", fontsize=17, y=0.97)
+  fig.tight_layout() # (rect=[0, 0, 1, 0.95])
+
+  ## Save plot
+  path = OUT_DIR / f'STREAM.png'
+  fig.savefig(path, dpi=300)
+  print(f"[ OK ] figure saved to {path.resolve().absolute()}")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Unified CLI (sub-commands: files / sbm)
@@ -201,26 +302,33 @@ def main(argv: list[str] | None = None) -> None:
   files_p = subparsers.add_parser("files", help="Parse one or more STREAM output files")
   files_p.add_argument("inputs", nargs="+", help="STREAM output text files")
   files_p.add_argument("-H", "--hardware", nargs="+", help="Hardware label per input file")
-  files_p.add_argument("-o", "--output", help="Save figure instead of displaying it")
   files_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
+
+  # ── df sub-command ────────────────────────────────────────────────
+  df_p = subparsers.add_parser("df", help="Parse a CSV input file")
+  df_p.add_argument("input", type=Path, help="Input CSV text file")
+  df_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
 
   # ── sbm sub-command ────────────────────────────────────────────────
   sbm_p = subparsers.add_parser("sbm", help="Pull STREAM outputs from sbm jobs")
   sbm_p.add_argument("-s", "--status", nargs="+", default=["COMPLETE"], help="Job status filter")
-  sbm_p.add_argument("-o", "--output", help="Save figure instead of displaying it")
   sbm_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
 
   args = parser.parse_args(argv)
   cores = [int(c) for c in args.cores] if args.cores else None
 
-  if args.mode == "files":
+  if args.mode == "sbm":
+    df = _build_dataframe_from_jobs(args.status)
+    path = OUT_DIR / "STREAM_data.csv"
+    df.to_csv(path, index=False)
+    print(f"Wrote CSV summary with {len(df)} rows to {path.resolve().absolute()}")
+  elif args.mode == "files":
     labels = _infer_hardware_labels(args.inputs, args.hardware)
     df = _build_dataframe_from_files(args.inputs, labels)
-    _plot(df, cores, args.output)
+  elif args.mode == "df":
+    df = pd.read_csv(args.input)
 
-  elif args.mode == "sbm":
-    df = _build_dataframe_from_jobs(args.status)
-    _plot(df, cores, args.output)
+  _plot(df, cores)
 
 
 if __name__ == "__main__":
