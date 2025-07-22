@@ -34,6 +34,7 @@ Install the PyPI bits with: ``pip install pandas matplotlib``.
 """
 
 import argparse
+import itertools
 import os
 from pathlib import Path
 import re
@@ -59,10 +60,10 @@ OUT_DIR = Path('results')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-FONT_TITLE = 18
-FONT_AXES = 18
-FONT_TICKS = 16
-FONT_LEGEND = 14
+FONT_TITLE = 38
+FONT_AXES = 28
+FONT_TICKS = 20
+FONT_LEGEND = 16
 
 plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
 plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
@@ -70,6 +71,14 @@ plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
 plt.rc('ytick', labelsize=FONT_TICKS)   # fontsize of the tick labels
 plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
 plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
+
+BOARD_NAMES_MAP = {
+  'brah': 'AMD EPYC 7742',
+  'baldo': 'AMD EPYC 7742',
+  'pioneer': 'Milk-V Pioneer',
+  'bananaf3': 'Banana Pi F3',
+  'arriesgado': 'HiFive Unmatched',
+}
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Low-level parsing helpers
@@ -239,8 +248,10 @@ def add_zoom_inset(
 
 def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
   marker_cycle = ["o", "s", "^", "d", "x", "P", "*", "v", ">"]
+  color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+  hws_color_map = dict(zip(sorted(df['hardware'].unique()), itertools.cycle(color_cycle)))
 
-  fig, axes = plt.subplots(2, 2, figsize=(13, 9), sharey=False)
+  fig, axes = plt.subplots(2, 2, figsize=(17, 10), sharey=False)
   axes = axes.flatten()
 
   for idx, func in enumerate(FUNCTIONS):
@@ -256,14 +267,15 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
       ax.plot(
         group_sorted["cores"],
         group_sorted["bandwidth_GBps"],
-        label=hw,
+        color=hws_color_map.get(hw, hw),
+        label=BOARD_NAMES_MAP.get(hw, hw),
         marker=marker_cycle[j % len(marker_cycle)],
         linewidth=1.8,
       )
     ax.set_xticks(list(func_df['cores'].unique()))
-    ax.set_title(func)
-    ax.set_xlabel("CPU cores")
-    ax.set_ylabel("Bandwidth [GB/s]")
+    ax.set_title(func, fontsize=FONT_TITLE)
+    if idx >= 2: ax.set_xlabel("CPU cores")
+    if idx % 2 == 0: ax.set_ylabel("Bandwidth [GB/s]")
     ax.grid(True, linestyle="-", alpha=0.8)
     ax.legend(loc='upper left')
 
@@ -274,7 +286,7 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
     zoom_ax = add_zoom_inset(
       ax,
       zoom_region=(0.0, 9.0, min_y*0.96, max_y*1.04),
-      inset_position=(0.3, 0.1, 0.6, 0.72),  # x0, y0, width, height (ALL in percentage wrt ax size)
+      inset_position=(0.33, 0.1, 0.6, 0.72),  # x0, y0, width, height (ALL in percentage wrt ax size)
       rect_kwargs={'edgecolor': 'red', 'linestyle': '--', 'linewidth': 1},
       zoom_ax_kwargs={'grid': True, 'set_xticks': [2**p for p in range(8) if 2**p <= zoom_cores_limit]}
     )
@@ -283,7 +295,7 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
       zoom_ax.spines[dir].set_linestyle(":")
       zoom_ax.spines[dir].set_edgecolor("red")
 
-  fig.suptitle("STREAM - Memory Bandwidth - Scaling", fontsize=17, y=0.97)
+  # fig.suptitle("STREAM - Memory Bandwidth - Scaling", fontsize=17, y=0.97)
   fig.tight_layout() # (rect=[0, 0, 1, 0.95])
 
   ## Save plot

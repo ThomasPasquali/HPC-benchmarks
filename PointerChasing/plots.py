@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 import sbatchman as sbm
 
 
-FONT_TITLE = 18
-FONT_AXES = 18
-FONT_TICKS = 16
+FONT_TITLE = 28
+FONT_AXES = 20
+FONT_TICKS = 19
 FONT_LEGEND = 14
 
 plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
@@ -24,6 +24,14 @@ CACHE_SIZES = {
   'pioneer':    [(64 * 1024, 'L1 cache'), (1 * 1024 * 1024, 'L2 cache'),  (64 * 1024 * 1024, 'L3 cache')],
   'bananaf3':   [(32 * 1024, 'L1 cache'), (512 * 1024     , 'L2 cache'),  (512 * 1024,       'TCM')     ],
   'arriesgado': [(64 * 1024, 'L1 cache'), (2 * 1024 * 1024, 'L2 cache'),  (0,                '')        ],
+}
+
+BOARD_NAMES_MAP = {
+  'brah': 'AMD EPYC 7742',
+  'baldo': 'AMD EPYC 7742',
+  'pioneer': 'Milk-V Pioneer',
+  'bananaf3': 'Banana Pi F3',
+  'arriesgado': 'HiFive Unmatched',
 }
 
 
@@ -79,11 +87,11 @@ def generate_dataframe_from_jobs(jobs):
 
 
 def plot_random(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
-  fig, ax = plt.subplots(figsize=(9, 5), dpi=100)
+  fig, ax = plt.subplots(figsize=(11, 6), dpi=300)
   
   occupied_cache_size_text_pos = []
   for hw_name, group in df.groupby("hw"):
-    ax.plot(group['x'], group['y'], marker="o", markersize=3, linewidth=1, label=hw_name, color=hws_color_map[hw_name])
+    ax.plot(group['x'], group['y'], marker="o", markersize=3, linewidth=1, label=BOARD_NAMES_MAP.get(hw_name,hw_name), color=hws_color_map[hw_name])
     l1, l2, l3 = CACHE_SIZES.get(hw_name, ((0,''), (0,''), (0,'')))
     for pos, name in l1, l2, l3:
       if pos > 0:
@@ -95,7 +103,7 @@ def plot_random(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
   ax.set_xscale("log", base=2)
   ax.set_xlabel("Memory Area [Bytes]")
   ax.set_ylabel("Avg access time [ns]")
-  ax.set_title("Access Times vs Memory Area")
+  ax.set_title("Random Chase - Memory Latency vs Memory Area", fontsize=FONT_TITLE)
   ax.grid(True, linestyle="-", alpha=0.8)
   ax.legend()
   fig.tight_layout()
@@ -105,13 +113,13 @@ def plot_random(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
 
 
 def plot_linear(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
-  fig, ax = plt.subplots(figsize=(9, 5), dpi=100)
+  fig, ax = plt.subplots(figsize=(11, 6), dpi=300)
   for hw_name, group in df.groupby("hw"):
-    ax.plot(group['x'], group['y'], marker="o", markersize=3, linewidth=1, label=hw_name, color=hws_color_map[hw_name])
+    ax.plot(group['x'], group['y'], marker="o", markersize=3, linewidth=1, label=BOARD_NAMES_MAP.get(hw_name,hw_name), color=hws_color_map[hw_name])
 
   ax.set_xlabel("Stride [Bytes]")
   ax.set_ylabel("Avg access time [ns]")
-  ax.set_title("Access Time vs Stride")
+  ax.set_title("Linear Chase - Memory Latency vs Stride", fontsize=FONT_TITLE)
   ax.grid(True, linestyle="-", alpha=0.6)
   ax.legend()
   fig.tight_layout()
@@ -121,14 +129,14 @@ def plot_linear(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
 
 
 def plot_fused(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
-  fig, ax = plt.subplots(figsize=(15, 9), dpi=100)
+  fig, ax = plt.subplots(figsize=(15, 9), dpi=300)
   for (hw_name, fuse), group in df.groupby(["hw", "fuse"]):
-    label = f"{hw_name} - Fuse {int(fuse)}"
+    label = f"{BOARD_NAMES_MAP.get(hw_name,hw_name)} - Fuse {int(fuse)}"
     ax.plot(group['x'], group['y'], marker=hws_marker_map[hw_name], markersize=3, linewidth=1, label=label, linestyle=hws_linestyle_map[hw_name], color=fuse_color_map[fuse])
 
   ax.set_xlabel("Stride [Bytes]")
   ax.set_ylabel("Bandwidth [GiB/s]")
-  ax.set_title("Bandwidth varying Stride and Fuse")
+  ax.set_title("Linear Chase - Memory Bandwidth vs Stride and Fuse", fontsize=FONT_TITLE+5)
   ax.grid(True, linestyle="-", alpha=0.8)
   ax.legend()
   fig.tight_layout()
@@ -163,15 +171,16 @@ def main():
     df.to_csv(path, index=False)
     print(f"Saved dataframe to CSV: {path}")
     
+  hws = sorted(df['hw'].unique())
   color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-  hws_color_map = dict(zip(df['hw'].unique(), itertools.cycle(color_cycle)))
-  fuse_color_map = dict(zip(df['fuse'].unique(), itertools.cycle(color_cycle)))
+  hws_color_map = dict(zip(hws, itertools.cycle(color_cycle)))
+  fuse_color_map = dict(zip(sorted(df['fuse'].unique()), itertools.cycle(color_cycle)))
   
   linestyle_cycle = itertools.cycle(["-", "--", "-.", ":"])
-  hws_linestyle_map = dict(zip(df['hw'].unique(), linestyle_cycle))
+  hws_linestyle_map = dict(zip(hws, linestyle_cycle))
   
   marker_cycle = itertools.cycle(["o", "v", "P", "X"])
-  hws_marker_map = dict(zip(df['hw'].unique(), marker_cycle))
+  hws_marker_map = dict(zip(hws, marker_cycle))
 
   for program, plot_func in PLOTTERS.items():
     df_subset = df[df['program'] == program]
