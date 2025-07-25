@@ -34,7 +34,6 @@ Install the PyPI bits with: ``pip install pandas matplotlib``.
 """
 
 import argparse
-import itertools
 import os
 from pathlib import Path
 import re
@@ -46,6 +45,10 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.patches import Rectangle
 
+sys.path.append(str(Path(__file__).parent.parent))
+from py_utils.cli import load_csv_files
+from py_utils.constants import *
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Regex patterns and constants
 # ──────────────────────────────────────────────────────────────────────────────
@@ -55,30 +58,12 @@ _RATE_RE = re.compile(rf"^({'|'.join(FUNCTIONS)}):\s+([0-9]+(?:\.[0-9]+)?)")
 _THREADS_RE = re.compile(r"Number of Threads counted\s*=\s*(\d+)")
 _JOB_RE = re.compile(r"(\w+)_(\d+)cpus")  # captures hw and core count
 
-
-OUT_DIR = Path('results')
-OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-
-FONT_TITLE = 38
-FONT_AXES = 28
-FONT_TICKS = 20
-FONT_LEGEND = 16
-
 plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
 plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
 plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
 plt.rc('ytick', labelsize=FONT_TICKS)   # fontsize of the tick labels
 plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
 plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
-
-BOARD_NAMES_MAP = {
-  'brah': 'AMD EPYC 7742',
-  'baldo': 'AMD EPYC 7742',
-  'pioneer': 'Milk-V Pioneer',
-  'bananaf3': 'Banana Pi F3',
-  'arriesgado': 'HiFive Unmatched',
-}
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Low-level parsing helpers
@@ -248,9 +233,7 @@ def add_zoom_inset(
 
 
 def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
-  marker_cycle = ["o", "s", "^", "d", "x", "P", "*", "v", ">"]
-  color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-  hws_color_map = dict(zip(sorted(df['hardware'].unique()), itertools.cycle(color_cycle)))
+  hws_color_map = dict(zip(sorted(df['hardware'].unique()), COLORS_CYCLE))
 
   fig, axes = plt.subplots(2, 2, figsize=(17, 10), sharey=False)
   axes = axes.flatten()
@@ -270,7 +253,7 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
         group_sorted["bandwidth_GBps"],
         color=hws_color_map.get(hw, hw),
         label=BOARD_NAMES_MAP.get(hw, hw),
-        marker=marker_cycle[j % len(marker_cycle)],
+        marker=MARKERS_LIST[j % len(MARKERS_LIST)],
         linewidth=1.8,
       )
     ax.set_xticks(list(func_df['cores'].unique()))
@@ -308,15 +291,6 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
 # Unified CLI (sub-commands: files / sbm)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def load_csv_files(filepaths: List[Path | str]) -> pd.DataFrame:
-  dfs = []
-  for file in filepaths:
-    cluster = Path(file).stem.split("_")[0]
-    df = pd.read_csv(file)
-    df["cluster"] = cluster
-    dfs.append(df)
-  return pd.concat(dfs, ignore_index=True)
-
 def main(argv: list[str] | None = None) -> None:
   parser = argparse.ArgumentParser(
     description="Plot STREAM results from plain files **or** directly from SbatchMan jobs.",
@@ -352,7 +326,7 @@ def main(argv: list[str] | None = None) -> None:
     labels = _infer_hardware_labels(args.inputs, args.hardware)
     df = _build_dataframe_from_files(args.inputs, labels)
   elif args.mode == "df":
-    df =load_csv_files(args.input)
+    df = load_csv_files(args.inputs)
 
   _plot(df, cores)
 

@@ -1,16 +1,15 @@
 import itertools
 from pathlib import Path
 import argparse
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import sbatchman as sbm
 
-
-FONT_TITLE = 28
-FONT_AXES = 20
-FONT_TICKS = 19
-FONT_LEGEND = 14
+sys.path.append(str(Path(__file__).parent.parent))
+from py_utils.cli import get_basic_cli_parser, load_csv_files
+from py_utils.constants import *
 
 plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
 plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
@@ -18,21 +17,6 @@ plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
 plt.rc('ytick', labelsize=FONT_TICKS)   # fontsize of the tick labels
 plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
 plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
-
-
-CACHE_SIZES = {
-  'pioneer':    [(64 * 1024, 'L1 cache'), (1 * 1024 * 1024, 'L2 cache'),  (64 * 1024 * 1024, 'L3 cache')],
-  'bananaf3':   [(32 * 1024, 'L1 cache'), (512 * 1024     , 'L2 cache'),  (512 * 1024,       'TCM')     ],
-  'arriesgado': [(64 * 1024, 'L1 cache'), (2 * 1024 * 1024, 'L2 cache'),  (0,                '')        ],
-}
-
-BOARD_NAMES_MAP = {
-  'brah': 'AMD EPYC 7742',
-  'baldo': 'AMD EPYC 7742',
-  'pioneer': 'Milk-V Pioneer',
-  'bananaf3': 'Banana Pi F3',
-  'arriesgado': 'HiFive Unmatched',
-}
 
 
 def parse_random_chase(path, hw_name):
@@ -153,34 +137,26 @@ PLOTTERS = {
 
 
 def main():
-  parser = argparse.ArgumentParser()
-  parser.add_argument("--output-dir", type=Path, default=Path("./results"))
-  parser.add_argument("--csv", type=Path, help="Optional CSV file to read data from")
+  parser = get_basic_cli_parser()
   args = parser.parse_args()
-
   args.output_dir.mkdir(parents=True, exist_ok=True)
 
   if args.csv:
-    print(f"Reading data from CSV: {args.csv}")
+    print(f"Reading data from CSV file(s): {args.csv}")
     df = pd.read_csv(args.csv)
   else:
-    print("Generating data from jobs...")
-    jobs = sbm.jobs_list(from_active=False, from_archived=True)
+    print("Generating data SbatchMan from jobs...")
+    jobs = sbm.jobs_list(from_active=True, from_archived=False, status=[sbm.Status.COMPLETED])
     df = generate_dataframe_from_jobs(jobs)
-    path = args.output_dir / 'pointer_chasing_data.csv'
+    path = args.output_dir / f'{sbm.get_cluster_name()}_threads_sync.csv'
     df.to_csv(path, index=False)
     print(f"Saved dataframe to CSV: {path}")
     
   hws = sorted(df['hw'].unique())
-  color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
-  hws_color_map = dict(zip(hws, itertools.cycle(color_cycle)))
-  fuse_color_map = dict(zip(sorted(df['fuse'].unique()), itertools.cycle(color_cycle)))
-  
-  linestyle_cycle = itertools.cycle(["-", "--", "-.", ":"])
-  hws_linestyle_map = dict(zip(hws, linestyle_cycle))
-  
-  marker_cycle = itertools.cycle(["o", "v", "P", "X"])
-  hws_marker_map = dict(zip(hws, marker_cycle))
+  hws_color_map = dict(zip(hws, COLORS_CYCLE))
+  fuse_color_map = dict(zip(sorted(df['fuse'].unique()), COLORS_CYCLE))
+  hws_linestyle_map = dict(zip(hws, LINESTYLES_CYCLE))
+  hws_marker_map = dict(zip(hws, itertools.cycle(MARKERS_LIST)))
 
   for program, plot_func in PLOTTERS.items():
     df_subset = df[df['program'] == program]
@@ -194,7 +170,7 @@ def main():
     # for hw, hw_df in df_subset.groupby("hw"):
     #   plot_func(hw_df, args.output_dir / f"{hw}_{program}.png", hws_color_map, hws_linestyle_map, fuse_color_map)
 
-  print("✔ All plots generated.")
+  print("✅ All plots generated.")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ haicgu_source.sh
 *results/
 
 */test.py
+*__pycache__
 
 SbatchMan/
 
