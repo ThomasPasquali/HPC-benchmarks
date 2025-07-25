@@ -1,0 +1,29 @@
+variables:
+  pioneer_ncpus: [1, 2, 4, 8, 16, 32, 64]
+  bananaf3_ncpus: [1, 2, 4, 8]
+  arriesgado_ncpus: [1, 2, 4]
+  benchmark:
+    - atomic
+    - cna
+    - mcs
+    - pmutex
+  duration: [20]
+  runs: [5]
+
+preprocess: "export LD_LIBRARY_PATH=/apps/riscv/llvm/EPI/development/lib"
+
+jobs:
+  - config: "pioneer_{pioneer_ncpus}cpus"
+    command: "./bin/{benchmark} {pioneer_ncpus} {duration} {runs}"
+    config_jobs:
+      - tag: "{benchmark}_{pioneer_ncpus}cpus"
+
+  - config: "arriesgado_{arriesgado_ncpus}cpus"
+    command: "./bin/{benchmark} {arriesgado_ncpus} {duration} {runs}"
+    config_jobs:
+      - tag: "{benchmark}_{arriesgado_ncpus}cpus"
+
+  - config: "bananaf3_{bananaf3_ncpus}cpus"
+    command: "./bin/{benchmark} {bananaf3_ncpus} {duration} {runs}"
+    config_jobs:
+      - tag: "{benchmark}_{bananaf3_ncpus}cpus"

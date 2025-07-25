@@ -3,7 +3,8 @@ variables:
   bananaf3_ncpus: [1, 2, 4, 8]
   arriesgado_ncpus: [1, 2, 4]
 
-command: "./STREAM/stream_c.exe"
+preprocess: "export LD_LIBRARY_PATH=/apps/riscv/llvm/EPI/development/lib"
+command: "./STREAM/stream_c_custom"
 
 jobs:
   - config: "pioneer_{pioneer_ncpus}cpus"
@@ -17,3 +18,5 @@ jobs:
   - config: "bananaf3_{bananaf3_ncpus}cpus"
     config_jobs:
       - tag: "stream_{bananaf3_ncpus}cpus"
+      
+      

@@ -144,7 +144,8 @@ def _build_dataframe_from_files(paths: List[str], hw_labels: List[str]) -> pd.Da
 def _build_dataframe_from_jobs(status: List[str]) -> pd.DataFrame:
   import sbatchman as sbm
 
-  jobs = sbm.jobs_list(from_active=True, from_archived=True, status=[sbm.Status[s] for s in status])
+  jobs = sbm.jobs_list(from_active=True, from_archived=True, status=status)
+  print(jobs)
   rows: list[dict] = []
   for job in jobs:
     m = _JOB_RE.match(job.config_name)
@@ -307,6 +308,15 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
 # Unified CLI (sub-commands: files / sbm)
 # ──────────────────────────────────────────────────────────────────────────────
 
+def load_csv_files(filepaths: List[Path | str]) -> pd.DataFrame:
+  dfs = []
+  for file in filepaths:
+    cluster = Path(file).stem.split("_")[0]
+    df = pd.read_csv(file)
+    df["cluster"] = cluster
+    dfs.append(df)
+  return pd.concat(dfs, ignore_index=True)
+
 def main(argv: list[str] | None = None) -> None:
   parser = argparse.ArgumentParser(
     description="Plot STREAM results from plain files **or** directly from SbatchMan jobs.",
@@ -322,12 +332,12 @@ def main(argv: list[str] | None = None) -> None:
 
   # ── df sub-command ────────────────────────────────────────────────
   df_p = subparsers.add_parser("df", help="Parse a CSV input file")
-  df_p.add_argument("input", type=Path, help="Input CSV text file")
+  df_p.add_argument("inputs", nargs="+", type=Path, help="Input CSV text file(s)")
   df_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
 
   # ── sbm sub-command ────────────────────────────────────────────────
   sbm_p = subparsers.add_parser("sbm", help="Pull STREAM outputs from sbm jobs")
-  sbm_p.add_argument("-s", "--status", nargs="+", default=["COMPLETE"], help="Job status filter")
+  sbm_p.add_argument("-s", "--status", nargs="+", default=["COMPLETED"], help="Job status filter")
   sbm_p.add_argument("-c", "--cores", nargs='+', help="A filter for the number of cores", default=None)
 
   args = parser.parse_args(argv)
@@ -342,7 +352,7 @@ def main(argv: list[str] | None = None) -> None:
     labels = _infer_hardware_labels(args.inputs, args.hardware)
     df = _build_dataframe_from_files(args.inputs, labels)
   elif args.mode == "df":
-    df = pd.read_csv(args.input)
+    df =load_csv_files(args.input)
 
   _plot(df, cores)
 

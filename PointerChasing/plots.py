@@ -136,7 +136,7 @@ def plot_fused(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, 
 
   ax.set_xlabel("Stride [Bytes]")
   ax.set_ylabel("Bandwidth [GiB/s]")
-  ax.set_title("Linear Chase - Memory Bandwidth vs Stride and Fuse", fontsize=FONT_TITLE+5)
+  ax.set_title("Fused Linear Chase - Memory Bandwidth vs Stride and Fuse", fontsize=FONT_TITLE+5)
   ax.grid(True, linestyle="-", alpha=0.8)
   ax.legend()
   fig.tight_layout()
