@@ -17,3 +17,9 @@ hca:
 
     - name: "bananaf3"
       partition: "bananaf3"
+
+brah:
+  scheduler: local
+
+  configs:
+    - name: "brah"

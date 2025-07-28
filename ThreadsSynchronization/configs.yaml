@@ -1,4 +1,6 @@
 variables:
+  brah_ncpus: [1, 2, 4, 8, 16, 32, 64]
+  
   pioneer_ncpus: [1, 2, 4, 8, 16, 32, 64]
   bananaf3_ncpus: [1, 2, 4, 8]
   arriesgado_ncpus: [1, 2, 4]
@@ -24,3 +26,11 @@ hca:
     - name: "bananaf3_{bananaf3_ncpus}cpus"
       partition: "bananaf3"
       cpus_per_task: "{bananaf3_ncpus}"
+
+brah:
+  scheduler: local
+
+  configs:
+    - name: "brah_{brah_ncpus}cpus"
+      env:
+        - "OMP_NUM_THREADS={brah_ncpus}"
