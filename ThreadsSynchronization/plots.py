@@ -1,3 +1,4 @@
+import math
 import re
 import sys
 import pandas as pd
@@ -9,6 +10,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.cli import get_basic_cli_parser, load_csv_files
 from py_utils.constants import *
 
+FONT_LEGEND += 5
 plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
 plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
 plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
@@ -17,6 +19,13 @@ plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
 plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 
 USE_LOG_SCALE = True
+
+PROGRAM_NAMES_MAP = {
+  'pmutex': 'PMutex',
+  'atomic': 'Atomic',
+  'cna': 'CNA',
+  'mcs': 'MSC',
+}
 
 _JOB_RE = re.compile(r"(\w+)_(\d+)cpus")
 
@@ -34,15 +43,17 @@ def generate_dataframe_from_jobs(jobs) -> pd.DataFrame:
   return pd.concat([parse_sout(job) for job in jobs], ignore_index=True)
 
 
-def _set_common_plot_config(df, ax):
+def _set_common_plot_config(df, ax, set_ax_labels=True):
   if USE_LOG_SCALE:
     ax.set_xscale("log", base=2)
   cores_unique = sorted(df['cores'].unique())
   ax.set_xticks(cores_unique)
   ax.set_xticklabels(cores_unique)
-  ax.set_xlabel("Cores")
-  ax.set_ylabel("Throughput (Mops)")
+  if set_ax_labels:
+    ax.set_xlabel("Cores")
+    ax.set_ylabel("Throughput (Mops)")
   ax.grid(True)
+  ax.legend(loc='best')
   plt.tight_layout()
 
 def compare_programs_same_hw(df, hw_filter, dst: Path):
@@ -68,6 +79,50 @@ def compare_programs_same_hw(df, hw_filter, dst: Path):
   plt.savefig(dst, dpi=300)
   print(f'Plot saved to {dst}')
   plt.close()
+  
+def compare_programs_all_hw_grid(df, dst: Path, cols: int = 2):
+  """
+  For each unique hardware in the dataframe, generate a subplot comparing programs on that hardware.
+  Saves a single figure with all subplots in a grid layout.
+  """
+  unique_hw = sorted(df['hw'].unique())
+  n = len(unique_hw)
+  rows = math.ceil(n / cols)
+
+  fig, axes = plt.subplots(rows, cols, figsize=(8 * cols, 6 * rows), squeeze=False)
+  axes = axes.flatten()
+
+  i = 0
+  for i, hw_filter in enumerate(unique_hw):
+    subset = df[df['hw'] == hw_filter]
+    ax = axes[i]
+
+    sns.lineplot(
+      data=subset,
+      x='cores', y='throughput_mops',
+      hue='program',
+      style='program',
+      markers=True,
+      estimator='mean',
+      errorbar='sd',
+      ax=ax
+    )
+
+    ax.set_title(BOARD_NAMES_MAP.get(hw_filter, hw_filter))
+    ax.set_ylabel("Throughput [Mops]" if i % cols == 0 else "")
+    ax.set_xlabel("Cores" if int(i / cols) == (rows - 1) else "")
+    ax.grid(True)
+
+    _set_common_plot_config(subset, ax, set_ax_labels=False)
+
+  # Turn off any unused subplots
+  for j in range(i + 1, len(axes)):
+    fig.delaxes(axes[j])
+
+  fig.tight_layout()
+  fig.savefig(dst, dpi=300)
+  print(f'Grid plot saved to {dst}')
+  plt.close(fig)
 
 def compare_hw_same_program(df, program_filter, dst: Path):
   """
@@ -135,12 +190,16 @@ def main():
     print(f"Saved dataframe to CSV: {path}")
     
   print(df)
+  df['program'] = df['program'].map(PROGRAM_NAMES_MAP)
   programs = sorted(df['program'].unique())
   hws = sorted(df['hw'].unique())
   hws_color_map = dict(zip(hws, COLORS_CYCLE))
   hws_linestyle_map = dict(zip(hws, LINESTYLES_CYCLE))
   hws_marker_map = dict(zip(hws, itertools.cycle(MARKERS_LIST)))
 
+  path: Path = args.output_dir / 'hardware' / 'thread_sync_all_hw.png'
+  path.parent.mkdir(exist_ok=True, parents=True)
+  compare_programs_all_hw_grid(df, path)
   for hw in hws:
     path: Path = args.output_dir / 'hardware' / f'thread_sync_{hw}.png'
     path.parent.mkdir(exist_ok=True, parents=True)

@@ -3,7 +3,6 @@
 #include <atomic>
 #include <pthread.h>
 #include <algorithm>
-#include <numa.h>
 #include <sched.h>
 
 extern std::atomic<bool> stop_flag;

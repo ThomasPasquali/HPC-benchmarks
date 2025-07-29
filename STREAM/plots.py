@@ -65,6 +65,8 @@ plt.rc('ytick', labelsize=FONT_TICKS)   # fontsize of the tick labels
 plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
 plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 
+LOG_SCALE = True
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Low-level parsing helpers
 # ──────────────────────────────────────────────────────────────────────────────
@@ -130,7 +132,6 @@ def _build_dataframe_from_jobs(status: List[str]) -> pd.DataFrame:
   import sbatchman as sbm
 
   jobs = sbm.jobs_list(from_active=True, from_archived=True, status=status)
-  print(jobs)
   rows: list[dict] = []
   for job in jobs:
     m = _JOB_RE.match(job.config_name)
@@ -235,7 +236,7 @@ def add_zoom_inset(
 def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
   hws_color_map = dict(zip(sorted(df['hardware'].unique()), COLORS_CYCLE))
 
-  fig, axes = plt.subplots(2, 2, figsize=(17, 10), sharey=False)
+  fig, axes = plt.subplots(2, 2, figsize=(17, 14), sharey=False)
   axes = axes.flatten()
 
   for idx, func in enumerate(FUNCTIONS):
@@ -256,28 +257,34 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
         marker=MARKERS_LIST[j % len(MARKERS_LIST)],
         linewidth=1.8,
       )
-    ax.set_xticks(list(func_df['cores'].unique()))
+    if LOG_SCALE:
+      ax.set_xscale('log', base=2)
+    cores_ticks = list(sorted(func_df['cores'].unique()))
+    ax.set_xticks(cores_ticks)
+    ax.set_xticklabels([str(c) for c in cores_ticks])
     ax.set_title(func, fontsize=FONT_TITLE)
     if idx >= 2: ax.set_xlabel("CPU cores")
     if idx % 2 == 0: ax.set_ylabel("Bandwidth [GB/s]")
     ax.grid(True, linestyle="-", alpha=0.8)
-    ax.legend(loc='upper left')
+    ax.legend(loc='best')
 
     ## Add zoom
-    zoom_cores_limit = 8
-    max_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].max()
-    min_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].min()
-    zoom_ax = add_zoom_inset(
-      ax,
-      zoom_region=(0.0, 9.0, min_y*0.96, max_y*1.04),
-      inset_position=(0.33, 0.1, 0.6, 0.72),  # x0, y0, width, height (ALL in percentage wrt ax size)
-      rect_kwargs={'edgecolor': 'red', 'linestyle': '--', 'linewidth': 1},
-      zoom_ax_kwargs={'grid': True, 'set_xticks': [2**p for p in range(8) if 2**p <= zoom_cores_limit]}
-    )
-    zoom_ax.yaxis.tick_right()
-    for dir in ['top', 'right', 'bottom', 'left']:
-      zoom_ax.spines[dir].set_linestyle(":")
-      zoom_ax.spines[dir].set_edgecolor("red")
+    if not LOG_SCALE:
+      zoom_cores_limit = 8
+      max_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].max()
+      min_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].min()
+      zoom_ax = add_zoom_inset(
+        ax,
+        zoom_region=(0.0, 9.0, min_y*0.95, max_y*1.05),
+        inset_position=(0.33, 0.1, 0.6, 0.4),  # x0, y0, width, height (ALL in percentage wrt ax size)
+        rect_kwargs={'edgecolor': 'purple', 'linestyle': '-.', 'linewidth': 1},
+        zoom_ax_kwargs={'grid': True, 'set_xticks': [2**p for p in range(8) if 2**p <= zoom_cores_limit]}
+      )
+      zoom_ax.yaxis.tick_right()
+      for dir in ['top', 'right', 'bottom', 'left']:
+        zoom_ax.spines[dir].set_linestyle("-.")
+        zoom_ax.spines[dir].set_edgecolor("purple")
+        zoom_ax.spines[dir].set_linewidth(1.5)
 
   # fig.suptitle("STREAM - Memory Bandwidth - Scaling", fontsize=17, y=0.97)
   fig.tight_layout() # (rect=[0, 0, 1, 0.95])
