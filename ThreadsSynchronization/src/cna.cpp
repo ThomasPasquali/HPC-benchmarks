@@ -26,10 +26,7 @@ typedef struct {
 // Fixed NUMA node detection
 static int current_numa_node() {
     int core = sched_getcpu();
-    if (core < 16) return core / 8;
-    else if (core < 32) return (core - 16) / 8 + 2;
-    else if (core < 48) return (core - 32) / 8;
-    else return (core - 48) / 8 + 2;
+    return (core / 16);
 }
 
 #define THRESHOLD (0xffff)
