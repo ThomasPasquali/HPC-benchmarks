@@ -2,12 +2,12 @@ import argparse
 import pandas as pd
 
 from pathlib import Path
-from typing import List
+from typing import List, Union
 
 from py_utils import OUT_DIR
 
 
-def load_csv_files(filepaths: List[Path | str]) -> pd.DataFrame:
+def load_csv_files(filepaths: List[Union[Path, str]]) -> pd.DataFrame:
   dfs = []
   for file in filepaths:
     cluster = Path(file).stem.split("_")[0]

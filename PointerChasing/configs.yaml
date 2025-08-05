@@ -23,3 +23,19 @@ brah:
 
   configs:
     - name: "brah"
+
+baldo:
+  scheduler: slurm
+
+  default_conf:
+    nodes: 1
+    ntasks: 1
+    time: "05:00:00" 
+    gpus: 0
+    nodelist: ['gpu00']
+
+  configs:
+    - name: "baldo"
+      partition: "long"
+      account: "flavio.vella"
+      cpus_per_task: "1"

@@ -38,16 +38,15 @@ import os
 from pathlib import Path
 import re
 import sys
-from typing import List
+from typing import List, Union
 
 import pandas as pd
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1.inset_locator import inset_axes
-from matplotlib.patches import Rectangle
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.cli import load_csv_files
 from py_utils.constants import *
+from py_utils.utils import add_zoom_inset
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Regex patterns and constants
@@ -106,7 +105,7 @@ def _parse_single_stream_file(path: str) -> dict[str, float]:
 # DataFrame builders
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _infer_hardware_labels(paths: List[str], manual: List[str] | None) -> List[str]:
+def _infer_hardware_labels(paths: List[str], manual: Union[List[str], None]) -> List[str]:
   if manual is None:
     return [os.path.basename(p).split("_")[0] for p in paths]
   if len(manual) != len(paths):
@@ -157,83 +156,8 @@ def _build_dataframe_from_jobs(status: List[str]) -> pd.DataFrame:
     raise RuntimeError("No valid STREAM outputs found via sbm.")
   return pd.DataFrame(rows).sort_values(["function", "hardware", "cores"])
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Plotting helper
-# ──────────────────────────────────────────────────────────────────────────────
 
-def add_zoom_inset(
-  ax, zoom_region, inset_position=(0.6, 0.6, 0.3, 0.3),
-  draw_rect=True, rect_kwargs=None, zoom_ax_kwargs=None
-):
-  """
-  Adds a zoomed inset with full size and position control using inset_axes.
-
-  Parameters:
-  - ax: matplotlib.axes.Axes
-      The main axes.
-  - zoom_region: tuple (x1, x2, y1, y2)
-      Limits of the region to zoom into.
-  - inset_position: tuple (x0, y0, width, height)
-      Inset position in axes fraction coordinates (not figure coords).
-  - draw_rect: bool
-      Draw a dashed rectangle on the main plot to show zoom region.
-  - rect_kwargs: dict
-      Styling for the zoom rectangle.
-  - zoom_ax_kwargs: dict
-      Dict of method calls on the inset axes.
-  
-  Returns:
-  - axins: The inset axes object.
-  """
-  rect_kwargs = rect_kwargs or {'edgecolor': 'black', 'linestyle': 'dashed', 'linewidth': 1}
-  zoom_ax_kwargs = zoom_ax_kwargs or {}
-
-  # Create inset axes
-  bbox = inset_position
-  axins = inset_axes(
-    ax,
-    width="100%", height="100%",
-    bbox_to_anchor=bbox,
-    bbox_transform=ax.transAxes,
-    loc='lower left',
-    borderpad=0
-  )
-
-  # Set zoom limits
-  x1, x2, y1, y2 = zoom_region
-  axins.set_xlim(x1, x2)
-  axins.set_ylim(y1, y2)
-
-  # Copy each line fully
-  for line in ax.get_lines():
-    axins.plot(
-      line.get_xdata(),
-      line.get_ydata(),
-      color=line.get_color(),
-      linestyle=line.get_linestyle(),
-      linewidth=line.get_linewidth(),
-      marker=line.get_marker(),
-      markersize=line.get_markersize(),
-      markeredgecolor=line.get_markeredgecolor(),
-      markerfacecolor=line.get_markerfacecolor(),
-      alpha=line.get_alpha(),
-      label=line.get_label(),
-      zorder=line.get_zorder()
-    )
-
-  # Apply additional inset customizations
-  for method, args in zoom_ax_kwargs.items():
-    getattr(axins, method)(args) if isinstance(args, (list, tuple)) else getattr(axins, method)(args)
-
-  # Draw rectangle on main plot
-  if draw_rect:
-    rect = Rectangle((x1, y1), x2 - x1, y2 - y1, fill=False, **rect_kwargs)
-    ax.add_patch(rect)
-
-  return axins
-
-
-def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
+def _plot(df: pd.DataFrame, cores: Union[List[int], None]) -> None:
   hws_color_map = dict(zip(sorted(df['hardware'].unique()), COLORS_CYCLE))
 
   fig, axes = plt.subplots(2, 2, figsize=(17, 14), sharey=False)
@@ -267,12 +191,27 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
     if idx % 2 == 0: ax.set_ylabel("Bandwidth [GB/s]")
     ax.grid(True, linestyle="-", alpha=0.8)
     ax.legend(loc='best')
+    
+    zoom_cores_limit = 8
+    max_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].max()
+    min_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].min()
+    
+    # if idx == 0:
+    #   zoom_ax = add_zoom_inset(
+    #     ax,
+    #     zoom_region=(0.85, 8.5, -1., max_y*1.05),
+    #     inset_position=(0.02, 0.3, 0.68, 0.4),  # x0, y0, width, height (ALL in percentage wrt ax size)
+    #     rect_kwargs={'edgecolor': 'purple', 'linestyle': '-.', 'linewidth': 1},
+    #     zoom_ax_kwargs={'grid': True, 'set_xticks': [2**p for p in range(8) if 2**p <= zoom_cores_limit]}
+    #   )
+    #   zoom_ax.yaxis.tick_right()
+    #   for dir in ['top', 'right', 'bottom', 'left']:
+    #     zoom_ax.spines[dir].set_linestyle("-.")
+    #     zoom_ax.spines[dir].set_edgecolor("purple")
+    #     zoom_ax.spines[dir].set_linewidth(1.5)
 
     ## Add zoom
     if not LOG_SCALE:
-      zoom_cores_limit = 8
-      max_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].max()
-      min_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].min()
       zoom_ax = add_zoom_inset(
         ax,
         zoom_region=(0.0, 9.0, min_y*0.95, max_y*1.05),
@@ -286,7 +225,8 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
         zoom_ax.spines[dir].set_edgecolor("purple")
         zoom_ax.spines[dir].set_linewidth(1.5)
 
-  # fig.suptitle("STREAM - Memory Bandwidth - Scaling", fontsize=17, y=0.97)
+  if SET_FIG_TITLE:
+    fig.suptitle("STREAM - Memory Bandwidth - Scaling", fontsize=17, y=0.97)
   fig.tight_layout() # (rect=[0, 0, 1, 0.95])
 
   ## Save plot
@@ -298,7 +238,7 @@ def _plot(df: pd.DataFrame, cores: List[int] | None) -> None:
 # Unified CLI (sub-commands: files / sbm)
 # ──────────────────────────────────────────────────────────────────────────────
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: Union[List[str], None] = None) -> None:
   parser = argparse.ArgumentParser(
     description="Plot STREAM results from plain files **or** directly from SbatchMan jobs.",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,

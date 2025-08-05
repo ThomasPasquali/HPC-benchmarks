@@ -9,10 +9,13 @@ import sbatchman as sbm
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.cli import get_basic_cli_parser, load_csv_files
+from py_utils.utils import add_zoom_inset
 from py_utils.constants import *
 
-FONT_TITLE -= 10
+FONT_TITLE -= 12
+FONT_AXES -= 2
 FONT_LEGEND -= 4
+FONT_TICKS -= 2
 plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
 plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
 plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
@@ -23,15 +26,15 @@ plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 def human_readable_bytes(x, _):
   if x == 0:
     return "0"
-  units = ['B', 'KB', 'MB', 'GB']
+  units = ['B', 'KiB', 'MiB', 'GiB']
   i = 0
   while x >= 1024 and i < len(units) - 1:
     x /= 1024.0
     i += 1
   if x >= 10:
-    return f"{int(x)} {units[i]}"
+    return f"{int(x)}{units[i]}"
   else:
-    return f"{x:.0f} {units[i]}"
+    return f"{x:.0f}{units[i]}"
   
 
 def parse_random_chase(path, hw_name):
@@ -95,7 +98,7 @@ def plot_random(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
     for pos, name in l1, l2, l3:
       if pos > 0:
         ax.axvline(x=pos, linestyle="--", color=hws_color_map[hw_name], linewidth=0.9)
-        occupied = any([abs(pos-p)<2048 for p in occupied_cache_size_text_pos])
+        occupied = any([abs(1-(pos/p))<.05 for p in occupied_cache_size_text_pos])
         ax.text(
           pos*(1.03 if occupied else 0.78),
           df['y'].max()*1.04,
@@ -111,9 +114,31 @@ def plot_random(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
   ax.xaxis.set_major_formatter(FuncFormatter(human_readable_bytes))
   ax.set_xlabel("Memory Size") # [Bytes]
   ax.set_ylabel("Avg Access Time [ns]")
-  ax.set_title("Random Chase - Memory Latency vs Memory Size", fontsize=FONT_TITLE)
+  if SET_FIG_TITLE:
+    ax.set_title("Random Chase - Memory Latency vs Memory Size", fontsize=FONT_TITLE)
   ax.grid(True, linestyle=":", alpha=0.8)
   ax.legend()
+  
+  # zoom_ax = add_zoom_inset(
+  #   ax,
+  #   zoom_region=(800, 9*1024, 1., 3.),
+  #   inset_position=(0.01, 0.25, 0.25, 0.45),  # x0, y0, width, height (ALL in percentage wrt ax size)
+  #   rect_kwargs={'edgecolor': 'purple', 'linestyle': '-.', 'linewidth': 1},
+  #   rect_region=(900, -8, 8*1024, 20),
+  #   zoom_ax_kwargs={
+  #     'grid': True,
+  #     'set_xticks': [i*1024 for i in [2,4,8]],
+  #     'set_xticklabels': dict(labels=[f'{i}Kib' for i in [2,4,8]], fontsize=12),
+  #     'set_yticks': [1., 1.5, 2.5],
+  #     'set_yticklabels': dict(labels=['1', '1.5', '2.5'], fontsize=12),
+  #   },
+  # )
+  # zoom_ax.yaxis.tick_right()
+  # for dir in ['top', 'right', 'bottom', 'left']:
+  #   zoom_ax.spines[dir].set_linestyle("-.")
+  #   zoom_ax.spines[dir].set_edgecolor("purple")
+  #   zoom_ax.spines[dir].set_linewidth(1.5)
+  
   fig.tight_layout()
   fig.savefig(dst)
   print(f'Plot saved to {dst}')
@@ -127,7 +152,8 @@ def plot_linear(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
 
   ax.set_xlabel("Stride [Bytes]")
   ax.set_ylabel("Avg Access Time [ns]")
-  ax.set_title("Linear Chase - Memory Latency vs Stride", fontsize=FONT_TITLE)
+  if SET_FIG_TITLE:
+    ax.set_title("Linear Chase - Memory Latency vs Stride", fontsize=FONT_TITLE)
   ax.grid(True, linestyle="-", alpha=0.6)
   ax.legend()
   fig.tight_layout()
@@ -136,19 +162,20 @@ def plot_linear(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
   plt.close(fig)
 
 
-def plot_fused(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
-  fig, ax = plt.subplots(figsize=(15, 9), dpi=300)
+def plot_fused(df: pd.DataFrame, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
+  fig, ax = plt.subplots(figsize=(14, 8), dpi=300)
   
   ## !! FILTER !!
   df = df[df['x']<=80]
+  df = df[df['hw'].isin(['baldo', 'pioneer'])]
 
   for (hw_name, fuse), group in df.groupby(["hw", "fuse"]):
     label = f"{BOARD_NAMES_MAP.get(hw_name, hw_name)} - Fuse {int(fuse)}"
     ax.plot(
       group['x'], group['y'],
       marker=hws_marker_map.get(hw_name, 'o'),
-      markersize=3,
-      linewidth=1,
+      markersize=5,
+      linewidth=1.5,
       label=label,
       linestyle=hws_linestyle_map.get(hw_name, '-'),
       color=fuse_color_map.get(fuse, '#000000')
@@ -156,7 +183,8 @@ def plot_fused(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, 
 
   ax.set_xlabel("Stride [Bytes]")
   ax.set_ylabel("Bandwidth [GiB/s]")
-  ax.set_title("Fused Linear Chase - Memory Bandwidth vs Stride and Fuse", fontsize=FONT_TITLE + 5)
+  if SET_FIG_TITLE:
+    ax.set_title("Fused Linear Chase - Memory Bandwidth vs Stride and Fuse", fontsize=FONT_TITLE + 5)
   ax.grid(True, linestyle="-", alpha=0.8)
 
   # Improve legend
@@ -212,9 +240,9 @@ def main():
     # Combined plot over all hardware configs
     plot_func(df_subset, args.output_dir / f"combined_{program}.png", hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map)
 
-    # # Individual plots per hardware
-    # for hw, hw_df in df_subset.groupby("hw"):
-    #   plot_func(hw_df, args.output_dir / f"{hw}_{program}.png", hws_color_map, hws_linestyle_map, fuse_color_map)
+    # Individual plots per hardware
+    for hw, hw_df in df_subset.groupby("hw"):
+      plot_func(hw_df, args.output_dir / f"{hw}_{program}.png", hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map)
 
   print("✅ All plots generated.")
 

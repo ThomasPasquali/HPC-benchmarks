@@ -1,0 +1,15 @@
+variables:
+  ncpus: [1, 2, 4, 8, 16, 32, 64]
+  benchmark:
+    - atomic
+    - cna
+    - mcs
+    - pmutex
+  duration: [20]
+  runs: [5]
+
+jobs:
+  - config: "baldo_{ncpus}cpus"
+    command: "./bin/{benchmark} {ncpus} {duration} {runs}"
+    config_jobs:
+      - tag: "{benchmark}_{ncpus}cpus"

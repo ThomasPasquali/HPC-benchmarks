@@ -1,5 +1,6 @@
 variables:
-  brah_ncpus: [1, 2, 4, 8, 16, 32, 64]
+  amd_ncpus: [1, 2, 4, 8, 16, 32, 64]
+  baldo_ncpus: [1, 2, 4, 8] # Others are specified manually
 
   pioneer_ncpus: [1, 2, 4, 8, 16, 32, 64]
   bananaf3_ncpus: [1, 2, 4, 8]
@@ -38,6 +39,54 @@ brah:
   scheduler: local
 
   configs:
-    - name: "brah_{brah_ncpus}cpus"
+    - name: "brah_{amd_ncpus}cpus"
       env:
-        - "OMP_NUM_THREADS={brah_ncpus}"
+        - "OMP_NUM_THREADS={amd_ncpus}"
+
+baldo:
+  scheduler: slurm
+
+  default_conf:
+    nodes: 1
+    ntasks: 1
+    time: "01:00:00" 
+    gpus: 0
+    nodelist: ['gpu00']
+
+  configs:
+    # - name: "baldo_edu_{baldo_ncpus}cpus"
+    #   partition: "edu-medium"
+    #   cpus_per_task: "{baldo_ncpus}"
+    #   env:
+    #     - "OMP_NUM_THREADS={baldo_ncpus}"
+
+    - name: "baldo_{baldo_ncpus}cpus"
+      partition: "medium"
+      account: "flavio.vella"
+      cpus_per_task: "{baldo_ncpus}"
+      env:
+        - "OMP_NUM_THREADS={baldo_ncpus}"
+
+    - name: "baldo_16cpus"
+      partition: "medium"
+      account: "flavio.vella"
+      gpus: 2
+      cpus_per_task: "16"
+      env:
+        - "OMP_NUM_THREADS=16"
+
+    - name: "baldo_32cpus"
+      partition: "medium"
+      account: "flavio.vella"
+      gpus: 3
+      cpus_per_task: "32"
+      env:
+        - "OMP_NUM_THREADS=32"
+
+    - name: "baldo_64cpus"
+      partition: "medium"
+      account: "flavio.vella"
+      gpus: 6
+      cpus_per_task: "64"
+      env:
+        - "OMP_NUM_THREADS=64"

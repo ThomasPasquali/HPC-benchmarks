@@ -29,13 +29,16 @@ BOARD_SHORT_NAMES_MAP = {
 
 # Hard-coded data
 CACHE_SIZES = {
-  'pioneer':    [(64 * 1000,        'L1d'), (1 * 1000 * 1000,  'L2'),  (64 * 1000 * 1000,  'L3')],
-  'bananaf3':   [(32 * 1000,        'L1d'), (500 * 1000     ,  'L2'),  (2* 500 * 1000,     'L2 + TCM')],
-  'arriesgado': [(64 * 1000,        'L1d'), (2 * 1000 * 1000,  'L2'),  (0,                 '')        ],
-  'brah':       [(4 * 1000 * 1000,  'L1d'), (64 * 1000 * 1000, 'L2'),  (512 * 1000 * 1000, 'L3')],
+  'pioneer':    [(64 * 1024,        'L1d'), (1 * 1024 * 1024,  'L2'),  (64 * 1024 * 1024,  'L3')],
+  'bananaf3':   [(32 * 1024,        'L1d'), (500 * 1024     ,  'L2'),  (2* 500 * 1024,     'L2 + TCM')],
+  'arriesgado': [(64 * 1024,        'L1d'), (2 * 1024 * 1024,  'L2'),  (0,                 '')        ],
+  'brah':       [(4 * 1024 * 1024,  'L1d'), (64 * 1024 * 1024, 'L2'),  (0,                 '')        ],# (512 * 1024 * 1024, 'L3')],
+  'baldo':      [(4 * 1024 * 1024,  'L1d'), (64 * 1024 * 1024, 'L2'),  (0,                 '')        ],# (512 * 1024 * 1024, 'L3')],
 }
 
 # Plots style
 MARKERS_LIST = ["o", "s", "^", "d", "x", "P", "*", "v", ">"]
 COLORS_CYCLE = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
-LINESTYLES_CYCLE = itertools.cycle(["-", "--", "-.", ":"])
+LINESTYLES_CYCLE = itertools.cycle(["-", ":", "-.", "--"])
+
+SET_FIG_TITLE = False

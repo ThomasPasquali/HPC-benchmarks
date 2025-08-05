@@ -43,17 +43,18 @@ def generate_dataframe_from_jobs(jobs) -> pd.DataFrame:
   return pd.concat([parse_sout(job) for job in jobs], ignore_index=True)
 
 
-def _set_common_plot_config(df, ax, set_ax_labels=True):
+def _set_common_plot_config(df, ax, set_ax_labels=True, show_legend=True):
   if USE_LOG_SCALE:
     ax.set_xscale("log", base=2)
   cores_unique = sorted(df['cores'].unique())
   ax.set_xticks(cores_unique)
   ax.set_xticklabels(cores_unique)
+  ax.grid(True)
   if set_ax_labels:
     ax.set_xlabel("Cores")
     ax.set_ylabel("Throughput (Mops)")
-  ax.grid(True)
-  ax.legend(loc='best')
+  if show_legend:
+    ax.legend(loc='best')
   plt.tight_layout()
 
 def compare_programs_same_hw(df, hw_filter, dst: Path):
@@ -62,6 +63,8 @@ def compare_programs_same_hw(df, hw_filter, dst: Path):
   """
   subset = df[df['hw'] == hw_filter]
   plt.figure(figsize=(8, 6))
+  
+  
   ax = sns.lineplot(
     data=subset,
     x='cores', y='throughput_mops',
@@ -70,7 +73,9 @@ def compare_programs_same_hw(df, hw_filter, dst: Path):
     markers=True,
     estimator='mean', errorbar='sd'
   )
-  plt.title(f"Scaling of Programs on {hw_filter}")
+    
+  if SET_FIG_TITLE:
+    plt.title(f"Scaling of Programs on {hw_filter}")
   plt.ylabel("Throughput (Mops)")
   plt.xlabel("Cores")
   plt.grid(True)
@@ -96,7 +101,7 @@ def compare_programs_all_hw_grid(df, dst: Path, cols: int = 2):
   for i, hw_filter in enumerate(unique_hw):
     subset = df[df['hw'] == hw_filter]
     ax = axes[i]
-
+    
     sns.lineplot(
       data=subset,
       x='cores', y='throughput_mops',
@@ -105,7 +110,8 @@ def compare_programs_all_hw_grid(df, dst: Path, cols: int = 2):
       markers=True,
       estimator='mean',
       errorbar='sd',
-      ax=ax
+      ax=ax,
+      legend=False  # Prevent per-subplot legends
     )
 
     ax.set_title(BOARD_NAMES_MAP.get(hw_filter, hw_filter))
@@ -113,13 +119,40 @@ def compare_programs_all_hw_grid(df, dst: Path, cols: int = 2):
     ax.set_xlabel("Cores" if int(i / cols) == (rows - 1) else "")
     ax.grid(True)
 
-    _set_common_plot_config(subset, ax, set_ax_labels=False)
+    _set_common_plot_config(subset, ax, set_ax_labels=False, show_legend=False)
 
-  # Turn off any unused subplots
+  # Add a single legend at the top
+  legend_ax = fig.add_subplot(111, frameon=False)
+  legend_ax.axis('off')
+
+  # Use the first subset to generate handles/labels
+  first_subset = df[df['hw'] == unique_hw[0]]
+  sns.lineplot(
+      data=first_subset,
+      x='cores', y='throughput_mops',
+      hue='program',
+      style='program',
+      markers=True,
+      estimator='mean',
+      errorbar='sd',
+      ax=legend_ax,
+      legend=True
+  )
+  handles, labels = legend_ax.get_legend_handles_labels()
+  fig.delaxes(legend_ax)
+  fig.legend(
+    handles, labels,
+    loc='upper center',
+    # bbox_to_anchor=(0.5, 1.05),
+    ncol=4,
+    frameon=False
+  )
+
+  # Remove unused axes
   for j in range(i + 1, len(axes)):
     fig.delaxes(axes[j])
 
-  fig.tight_layout()
+  fig.tight_layout(rect=[0., 0., 1, 0.95])  # Adjust layout to make room for legend
   fig.savefig(dst, dpi=300)
   print(f'Grid plot saved to {dst}')
   plt.close(fig)
@@ -138,7 +171,9 @@ def compare_hw_same_program(df, program_filter, dst: Path):
     markers=True,
     estimator='mean', errorbar='sd'
   )
-  plt.title(f"Scaling of {program_filter} Across Hardware")
+    
+  if SET_FIG_TITLE:
+    plt.title(f"Scaling of {program_filter} Across Hardware")
   plt.ylabel("Throughput (Mops)")
   plt.xlabel("Cores")
   plt.grid(True)
@@ -162,7 +197,9 @@ def compare_programs_hw_combinations(df, dst: Path):
     markers=True,
     estimator='mean', errorbar='sd'
   )
-  plt.title("Scaling of All Program/Hardware Combinations")
+    
+  if SET_FIG_TITLE:
+    plt.title("Scaling of All Program/Hardware Combinations")
   plt.ylabel("Throughput (Mops)")
   plt.xlabel("Cores")
   plt.grid(True)
@@ -189,13 +226,11 @@ def main():
     df.to_csv(path, index=False)
     print(f"Saved dataframe to CSV: {path}")
     
+  df.sort_values('program', inplace=True)
   print(df)
   df['program'] = df['program'].map(PROGRAM_NAMES_MAP)
   programs = sorted(df['program'].unique())
   hws = sorted(df['hw'].unique())
-  hws_color_map = dict(zip(hws, COLORS_CYCLE))
-  hws_linestyle_map = dict(zip(hws, LINESTYLES_CYCLE))
-  hws_marker_map = dict(zip(hws, itertools.cycle(MARKERS_LIST)))
 
   path: Path = args.output_dir / 'hardware' / 'thread_sync_all_hw.png'
   path.parent.mkdir(exist_ok=True, parents=True)
