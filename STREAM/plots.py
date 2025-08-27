@@ -57,6 +57,7 @@ _RATE_RE = re.compile(rf"^({'|'.join(FUNCTIONS)}):\s+([0-9]+(?:\.[0-9]+)?)")
 _THREADS_RE = re.compile(r"Number of Threads counted\s*=\s*(\d+)")
 _JOB_RE = re.compile(r"(\w+)_(\d+)cpus")  # captures hw and core count
 
+FONT_LEGEND += 6
 plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
 plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
 plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
@@ -160,7 +161,7 @@ def _build_dataframe_from_jobs(status: List[str]) -> pd.DataFrame:
 def _plot(df: pd.DataFrame, cores: Union[List[int], None]) -> None:
   hws_color_map = dict(zip(sorted(df['hardware'].unique()), COLORS_CYCLE))
 
-  fig, axes = plt.subplots(2, 2, figsize=(17, 14), sharey=False)
+  fig, axes = plt.subplots(2, 2, figsize=(17, 11.5), sharey=False)
   axes = axes.flatten()
 
   for idx, func in enumerate(FUNCTIONS):
@@ -190,25 +191,25 @@ def _plot(df: pd.DataFrame, cores: Union[List[int], None]) -> None:
     if idx >= 2: ax.set_xlabel("CPU cores")
     if idx % 2 == 0: ax.set_ylabel("Bandwidth [GB/s]")
     ax.grid(True, linestyle="-", alpha=0.8)
-    ax.legend(loc='best')
+    # ax.legend(loc='best')
     
     zoom_cores_limit = 8
     max_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].max()
     min_y = func_df[func_df['cores'] <= zoom_cores_limit]['bandwidth_GBps'].min()
     
-    # if idx == 0:
-    #   zoom_ax = add_zoom_inset(
-    #     ax,
-    #     zoom_region=(0.85, 8.5, -1., max_y*1.05),
-    #     inset_position=(0.02, 0.3, 0.68, 0.4),  # x0, y0, width, height (ALL in percentage wrt ax size)
-    #     rect_kwargs={'edgecolor': 'purple', 'linestyle': '-.', 'linewidth': 1},
-    #     zoom_ax_kwargs={'grid': True, 'set_xticks': [2**p for p in range(8) if 2**p <= zoom_cores_limit]}
-    #   )
-    #   zoom_ax.yaxis.tick_right()
-    #   for dir in ['top', 'right', 'bottom', 'left']:
-    #     zoom_ax.spines[dir].set_linestyle("-.")
-    #     zoom_ax.spines[dir].set_edgecolor("purple")
-    #     zoom_ax.spines[dir].set_linewidth(1.5)
+    if idx == 0:
+      zoom_ax = add_zoom_inset(
+        ax,
+        zoom_region=(0.85, 8.5, -1., max_y*1.05),
+        inset_position=(0.02, 0.36, 0.68, 0.6),  # x0, y0, width, height (ALL in percentage wrt ax size)
+        rect_kwargs={'edgecolor': 'purple', 'linestyle': '-.', 'linewidth': 1},
+        zoom_ax_kwargs={'grid': True, 'set_xticks': [2**p for p in range(8) if 2**p <= zoom_cores_limit]}
+      )
+      zoom_ax.yaxis.tick_right()
+      for dir in ['top', 'right', 'bottom', 'left']:
+        zoom_ax.spines[dir].set_linestyle("-.")
+        zoom_ax.spines[dir].set_edgecolor("purple")
+        zoom_ax.spines[dir].set_linewidth(1.5)
 
     ## Add zoom
     if not LOG_SCALE:
@@ -228,6 +229,31 @@ def _plot(df: pd.DataFrame, cores: Union[List[int], None]) -> None:
   if SET_FIG_TITLE:
     fig.suptitle("STREAM - Memory Bandwidth - Scaling", fontsize=17, y=0.97)
   fig.tight_layout() # (rect=[0, 0, 1, 0.95])
+  
+  # Add a single legend at the top
+  legend_ax = fig.add_subplot(111, frameon=False)
+  legend_ax.axis('off')
+  func_df = df[df["function"] == 'Copy']
+  func_df['bandwidth_GBps'] = func_df['bandwidth_MBps'] / 1e3
+  for j, (hw, group) in enumerate(func_df.groupby("hardware", sort=False)):
+    group_sorted = group.sort_values("cores")
+    legend_ax.plot(
+      group_sorted["cores"],
+      group_sorted["bandwidth_GBps"],
+      color=hws_color_map.get(hw, hw),
+      label=BOARD_NAMES_MAP.get(hw, hw),
+      marker=MARKERS_LIST[j % len(MARKERS_LIST)],
+      linewidth=1.8,
+    )
+  handles, labels = legend_ax.get_legend_handles_labels()
+  fig.delaxes(legend_ax)
+  fig.legend(
+    handles, labels,
+    loc='upper center',
+    ncol=len(labels),
+    frameon=False
+  )
+  fig.tight_layout(rect=[0., 0., 1, 0.96])
 
   ## Save plot
   path = OUT_DIR / f'STREAM.png'

@@ -13,8 +13,8 @@ from py_utils.utils import add_zoom_inset
 from py_utils.constants import *
 
 FONT_TITLE -= 12
-FONT_AXES -= 2
-FONT_LEGEND -= 4
+FONT_AXES -= 7
+FONT_LEGEND -= 5
 FONT_TICKS -= 2
 plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
 plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
@@ -89,7 +89,7 @@ def generate_dataframe_from_jobs(jobs):
 
 
 def plot_random(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
-  fig, ax = plt.subplots(figsize=(11, 6), dpi=300)
+  fig, ax = plt.subplots(figsize=(11, 4), dpi=300)
   
   occupied_cache_size_text_pos = []
   for hw_name, group in df.groupby("hw"):
@@ -119,25 +119,25 @@ def plot_random(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
   ax.grid(True, linestyle=":", alpha=0.8)
   ax.legend()
   
-  # zoom_ax = add_zoom_inset(
-  #   ax,
-  #   zoom_region=(800, 9*1024, 1., 3.),
-  #   inset_position=(0.01, 0.25, 0.25, 0.45),  # x0, y0, width, height (ALL in percentage wrt ax size)
-  #   rect_kwargs={'edgecolor': 'purple', 'linestyle': '-.', 'linewidth': 1},
-  #   rect_region=(900, -8, 8*1024, 20),
-  #   zoom_ax_kwargs={
-  #     'grid': True,
-  #     'set_xticks': [i*1024 for i in [2,4,8]],
-  #     'set_xticklabels': dict(labels=[f'{i}Kib' for i in [2,4,8]], fontsize=12),
-  #     'set_yticks': [1., 1.5, 2.5],
-  #     'set_yticklabels': dict(labels=['1', '1.5', '2.5'], fontsize=12),
-  #   },
-  # )
-  # zoom_ax.yaxis.tick_right()
-  # for dir in ['top', 'right', 'bottom', 'left']:
-  #   zoom_ax.spines[dir].set_linestyle("-.")
-  #   zoom_ax.spines[dir].set_edgecolor("purple")
-  #   zoom_ax.spines[dir].set_linewidth(1.5)
+  zoom_ax = add_zoom_inset(
+    ax,
+    zoom_region=(800, 9*1024, 1., 3.),
+    inset_position=(0.01, 0.18, 0.25, 0.45),  # x0, y0, width, height (ALL in percentage wrt ax size)
+    rect_kwargs={'edgecolor': 'purple', 'linestyle': '-.', 'linewidth': 1},
+    rect_region=(900, -8, 8*1024, 20),
+    zoom_ax_kwargs={
+      'grid': True,
+      'set_xticks': [i*1024 for i in [2,4,8]],
+      'set_xticklabels': dict(labels=[f'{i}Kib' for i in [2,4,8]], fontsize=12),
+      'set_yticks': [1., 1.5, 2.5],
+      'set_yticklabels': dict(labels=['1', '1.5', '2.5'], fontsize=12),
+    },
+  )
+  zoom_ax.yaxis.tick_right()
+  for dir in ['top', 'right', 'bottom', 'left']:
+    zoom_ax.spines[dir].set_linestyle("-.")
+    zoom_ax.spines[dir].set_edgecolor("purple")
+    zoom_ax.spines[dir].set_linewidth(1.5)
   
   fig.tight_layout()
   fig.savefig(dst)
@@ -146,7 +146,7 @@ def plot_random(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
 
 
 def plot_linear(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
-  fig, ax = plt.subplots(figsize=(11, 6), dpi=300)
+  fig, ax = plt.subplots(figsize=(11, 4), dpi=300)
   for hw_name, group in df.groupby("hw"):
     ax.plot(group['x'], group['y'], marker="o", markersize=3, linewidth=1, label=BOARD_NAMES_MAP.get(hw_name,hw_name), color=hws_color_map[hw_name])
 
@@ -163,7 +163,7 @@ def plot_linear(df, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map,
 
 
 def plot_fused(df: pd.DataFrame, dst: Path, hws_color_map, hws_linestyle_map, hws_marker_map, fuse_color_map):
-  fig, ax = plt.subplots(figsize=(14, 8), dpi=300)
+  fig, ax = plt.subplots(figsize=(14, 5), dpi=300)
   
   ## !! FILTER !!
   df = df[df['x']<=80]
@@ -182,9 +182,9 @@ def plot_fused(df: pd.DataFrame, dst: Path, hws_color_map, hws_linestyle_map, hw
     )
 
   ax.set_xlabel("Stride [Bytes]")
-  ax.set_ylabel("Bandwidth [GiB/s]")
+  ax.set_ylabel("Access Speed [GiB/s]")
   if SET_FIG_TITLE:
-    ax.set_title("Fused Linear Chase - Memory Bandwidth vs Stride and Fuse", fontsize=FONT_TITLE + 5)
+    ax.set_title("Fused Linear Chase - Memory Access Speed vs Stride and Fuse", fontsize=FONT_TITLE + 5)
   ax.grid(True, linestyle="-", alpha=0.8)
 
   # Improve legend
@@ -220,7 +220,7 @@ def main():
     df = load_csv_files(args.csv)
   else:
     print("Generating data SbatchMan from jobs...")
-    jobs = sbm.jobs_list(from_active=True, from_archived=False, status=[sbm.Status.COMPLETED])
+    jobs = sbm.jobs_list(from_active=True, from_archived=False, status=[sbm.Status.COMPLETED, sbm.Status.TIMEOUT])
     df = generate_dataframe_from_jobs(jobs)
     path = args.output_dir / f'{sbm.get_cluster_name()}_pointer_chasing.csv'
     df.to_csv(path, index=False)

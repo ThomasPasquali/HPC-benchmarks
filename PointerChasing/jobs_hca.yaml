@@ -1,7 +1,7 @@
 variables:
   program: ["linear-chase", "random-chase", "fused-linear-chase"]
 
-preprocess: "export LD_LIBRARY_PATH=/apps/riscv/llvm/EPI/development/lib"
+# preprocess: "export LD_LIBRARY_PATH=/apps/riscv/llvm/EPI/development/lib"
 command: "./pointer-chasing/{program}"
 
 jobs:

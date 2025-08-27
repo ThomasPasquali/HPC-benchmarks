@@ -11,6 +11,7 @@ from py_utils.cli import get_basic_cli_parser, load_csv_files
 from py_utils.constants import *
 
 FONT_LEGEND += 5
+FONT_AXES -= 5
 plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
 plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
 plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
@@ -24,7 +25,7 @@ PROGRAM_NAMES_MAP = {
   'pmutex': 'PMutex',
   'atomic': 'Atomic',
   'cna': 'CNA',
-  'mcs': 'MSC',
+  'mcs': 'MCS',
 }
 
 _JOB_RE = re.compile(r"(\w+)_(\d+)cpus")
@@ -94,7 +95,7 @@ def compare_programs_all_hw_grid(df, dst: Path, cols: int = 2):
   n = len(unique_hw)
   rows = math.ceil(n / cols)
 
-  fig, axes = plt.subplots(rows, cols, figsize=(8 * cols, 6 * rows), squeeze=False)
+  fig, axes = plt.subplots(rows, cols, figsize=(8 * cols, 4 * rows), squeeze=False)
   axes = axes.flatten()
 
   i = 0
@@ -128,15 +129,15 @@ def compare_programs_all_hw_grid(df, dst: Path, cols: int = 2):
   # Use the first subset to generate handles/labels
   first_subset = df[df['hw'] == unique_hw[0]]
   sns.lineplot(
-      data=first_subset,
-      x='cores', y='throughput_mops',
-      hue='program',
-      style='program',
-      markers=True,
-      estimator='mean',
-      errorbar='sd',
-      ax=legend_ax,
-      legend=True
+    data=first_subset,
+    x='cores', y='throughput_mops',
+    hue='program',
+    style='program',
+    markers=True,
+    estimator='mean',
+    errorbar='sd',
+    ax=legend_ax,
+    legend=True
   )
   handles, labels = legend_ax.get_legend_handles_labels()
   fig.delaxes(legend_ax)
@@ -144,7 +145,7 @@ def compare_programs_all_hw_grid(df, dst: Path, cols: int = 2):
     handles, labels,
     loc='upper center',
     # bbox_to_anchor=(0.5, 1.05),
-    ncol=4,
+    ncol=len(labels),
     frameon=False
   )
 
@@ -152,7 +153,7 @@ def compare_programs_all_hw_grid(df, dst: Path, cols: int = 2):
   for j in range(i + 1, len(axes)):
     fig.delaxes(axes[j])
 
-  fig.tight_layout(rect=[0., 0., 1, 0.95])  # Adjust layout to make room for legend
+  fig.tight_layout(rect=[0., 0., 1, 0.94])  # Adjust layout to make room for legend
   fig.savefig(dst, dpi=300)
   print(f'Grid plot saved to {dst}')
   plt.close(fig)
