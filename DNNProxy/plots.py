@@ -274,7 +274,7 @@ def main():
         })
 
     df = pd.DataFrame(data)
-    df.to_csv(OUT_DIR / 'dnnproxies_data.csv')
+    df.to_csv(OUT_DIR / f'dnnproxies_{sbm.get_cluster_name()}_data.csv')
 
   print(df)
 

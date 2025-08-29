@@ -575,12 +575,12 @@ if __name__ == "__main__":
 
 
     df_aggr = pd.DataFrame(df_records_aggr)
-    path = OUT_DIR / "graph500_summary_aggr.csv"
+    path = OUT_DIR / f"graph500_{sbm.get_cluster_name()}_summary_aggr.csv"
     df_aggr.to_csv(path, index=False)
     print(f"Wrote CSV summary with {len(df_aggr)} rows to {path.resolve().absolute()}")
 
     df = pd.DataFrame(df_records)
-    path = OUT_DIR / "graph500_summary.csv"
+    path = OUT_DIR / f"graph500_{sbm.get_cluster_name()}_summary.csv"
     df.to_csv(path, index=False)
     print(f"Wrote CSV summary with {len(df)} rows to {path.resolve().absolute()}")
 
