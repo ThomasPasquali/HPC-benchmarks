@@ -2,13 +2,13 @@ sequential: true
 
 variables:
   nodes: [2, 4, 6, 8]
-  benchmark: ['gpt2', 'bert']
-  partition: ["nanjing"] # , "leonardo"]
+  benchmark: ['gpt2', 'bert', 'resnet50', 'gpt3', 'resnet152']
+  # partition: ["nanjing"]
+  # partition: ["leonardo"]
+  partition: ["eth", "ib"]
 
 jobs:
   - config: "{partition}_{nodes}nodes"
     config_jobs:
       - tag: "{benchmark}"
-        command: "mpirun -np {nodes} {benchmark} 24 {nodes}"
-      - tag: "resnet"
-        command: "mpirun -np {nodes} resnet"
+        command: "mpirun -np {nodes} {benchmark}"

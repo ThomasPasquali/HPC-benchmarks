@@ -7,6 +7,7 @@ haicgu_source.sh
 *haicgu/
 *brah/
 *results/
+*plots/
 
 */test.py
 *__pycache__
@@ -14,3 +15,6 @@ haicgu_source.sh
 SbatchMan/
 
 bin/
+
+HPCG/hpcg-cpu/
+HPL/hpl-2.3/

@@ -2,13 +2,13 @@ MPICXX = mpicxx
 
 BASE_PATH = DNN-cpp-proxies/proxies
 
-all: gpt2 bert resnet resnet152
+all: gpt2 bert resnet50 resnet152 gpt3
 
 # Communication only
 gpt2:
 	$(MPICXX) $(BASE_PATH)/comm_only/gpt2_large.cpp -o $@
 
-resnet:
+resnet50:
 	$(MPICXX) $(BASE_PATH)/comm_only/resnet50.cpp -o $@
 
 bert:
