@@ -4,8 +4,7 @@ variables:
   nodes: [1, 2, 4, 8]
   partition: ["nanjing"] # , "leonardo"]
 
-  bin: ["graph500_reference_bfs", "graph500_reference_bfs_smallbuf"]
-
+  bin: ["graph500_reference_bfs", "graph500_reference_bfs_smallbuf", "graph500_reference_bfs_largebuf"]
   scale: [14, 20, 22]
   edgefactor: [8, 16, 32]
 
