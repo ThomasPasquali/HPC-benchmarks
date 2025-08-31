@@ -12,7 +12,7 @@ additional_cmake_config=
 if [[ ! -d ${HPCG_PATH} ]]; then
   git clone -b $BRANCHNAME --recursive https://github.com/hpcg-benchmark/hpcg.git ${HPCG_PATH}
 else
-  echo "Directory hpcg-cpu already exists; assuming source code has been downloaded before"
+  echo "Directory ${HPCG_PATH} already exists; assuming source code has been downloaded before"
 fi
 
 cd ${HPCG_PATH}

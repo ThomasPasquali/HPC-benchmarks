@@ -1,0 +1,15 @@
+# Sequential is mandatory
+sequential: true
+
+variables:
+  nodes: [1, 2, 4, 8]
+  # partition: ["nanjing"]
+  partition: ["eth", "ib"]
+
+preprocess: "./gen_dat_file.sh {nodes} {nodes}"
+command: "mpirun -np {nodes} xhpl"
+
+jobs:
+  - config: "{partition}_{nodes}nodes"
+    config_jobs:
+      - tag: "hpl_{partition}"
