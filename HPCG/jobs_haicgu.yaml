@@ -1,0 +1,13 @@
+sequential: true
+
+variables:
+  nodes: [1, 2, 4, 8]
+  partition: ["eth", "ib"]
+
+preprocess: "cd hpcg-out; mkdir -p {partition}; cd {partition}; cp ../../hpcg.dat ."
+command: "mpirun -np {nodes} ../../hpcg-cpu/build/xhpcg"
+
+jobs:
+  - config: "{partition}_{nodes}nodes"
+    config_jobs:
+      - tag: "hpcg_{partition}"

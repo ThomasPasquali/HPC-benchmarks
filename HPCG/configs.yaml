@@ -1,0 +1,59 @@
+variables:
+  nodes: [1, 2, 4, 8]
+  partition: ["ib", "eth"]
+
+haicgu:
+  scheduler: slurm
+
+  default_conf:
+    account: "dcn"
+    cpus_per_task: 128
+    gpus: 0
+    time: "01:00:00"
+    modules: 
+      - "GCC/14.1.0"
+      - "OpenMPI/5.0.3"
+    env:
+      - "OMP_PROC_BIND=true"
+      - "OMP_NUM_THREADS=128"
+
+  configs:
+    - name: "{partition}_{nodes}nodes"
+      partition: "cn-{partition}"
+      nodes: "{nodes}"
+      ntasks: "{nodes}"
+
+leonardo:
+  scheduler: slurm
+
+  default_conf:
+    account: "IscrC_OMG-25"
+    cpus_per_task: 32
+    gpus: 0
+    time: "00:05:00"
+    partition: "boost_usr_prod"
+    qos: "normal"
+    modules: 
+      - "gcc/12.2.0"
+      - "openmpi/4.1.6--gcc--12.2.0-cuda-12.2"
+    env:
+      - "OMP_PROC_BIND=true"
+      - "OMP_NUM_THREADS=32"
+
+  configs:
+    - name: "leonardo_{nodes}nodes"
+      nodes: "{nodes}"
+      ntasks: "{nodes}"
+
+nanjing:
+  scheduler: local
+
+  default_conf:
+    env:
+      - "OMP_PROC_BIND=true"
+      - "OMP_NUM_THREADS=128"
+      - "PATH=/root/hpc/build/gcc/bin:/root/hpc/build/bin:$PATH"
+      - "LD_LIBRARY_PATH=/root/hpc/build/gcc/lib64:/root/hpc/build/lib:$LD_LIBRARY_PATH"
+
+  configs:
+    - name: "nanjing_{nodes}nodes"
