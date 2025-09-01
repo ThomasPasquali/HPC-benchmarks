@@ -15,6 +15,11 @@ haicgu:
       - "OpenMPI/5.0.3"
     env:
       - "SKIP_VALIDATION=1"
+      - "OMP_PROC_BIND=true"
+      - "OMP_NUM_THREADS=128"
+    exclude:
+      - cn17
+      - cn19
 
   configs:
     - name: "{partition}_{nodes}nodes"

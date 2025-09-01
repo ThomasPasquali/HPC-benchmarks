@@ -17,6 +17,9 @@ haicgu:
     env:
       - "OMP_PROC_BIND=true"
       - "OMP_NUM_THREADS=128"
+    exclude:
+      - cn17
+      - cn19
 
   configs:
     - name: "{partition}_{nodes}nodes"
