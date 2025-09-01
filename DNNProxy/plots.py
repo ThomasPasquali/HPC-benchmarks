@@ -1,5 +1,7 @@
+from csv import Error
 import itertools
 from pathlib import Path
+from pprint import pprint
 from statistics import geometric_mean, stdev
 import sys
 import sbatchman as sbm
@@ -215,23 +217,38 @@ def plot_performance_ratio(
 
 
 def parse_stdout(job: sbm.Job) -> Dict[str, List[float]]:
-  lines = job.get_stdout().strip().split('\n')
+  stdout = job.get_stdout()
+  if stdout is None:
+    raise Exception(f'Job stdout empty:\n{job}')
+  
+  model = None
+  if 'GPT2-' in stdout:
+    model = 'gpt2'
+  elif 'Bert-' in stdout:
+    model = 'bert'
+  elif 'ResNet-152' in stdout:
+    model = 'ResNet-152'
+  elif 'DLRM ' in stdout:
+    model = 'DLRM'
+  elif 'ResNet-50' in stdout:
+    if '(allreduce)' in stdout:
+      model = 'resnet-allreduce'
+    else:
+      model = 'resnet-ring'
+      
+  if model is None:
+    raise Error(f'Could not find the model in output of job: {job}\n{stdout}')
+  
+  lines = stdout.splitlines()
   times = {}
 
-  for line in lines[1:]:
-    parts = line.split(', ')
-    model, time = parts[-1].split(' = ')
+  if model in ['DLRM', 'ResNet-152']:
+    lines = [lines[-1]]
+    
+  for line in lines:
+    parts = line.split(', ') if ', ' in line else [line]
+    _, time = parts[-1].split(' = ')
     time = float(time.split(' ')[0])
-
-    if 'GPT2-' in model:
-      model = 'gpt2'
-    elif 'Bert-' in model:
-      model = 'bert'
-    elif 'ResNet-50' in model:
-      if '(allreduce)' in model:
-        model = 'resnet-allreduce'
-      else:
-        model = 'resnet-ring'
 
     if model not in times: times[model] = []
     times[model].append(time)
@@ -252,29 +269,36 @@ def main():
     print(f'Reading data from file: "{data_path}"')
     df = pd.read_csv(data_path)
   else:
-    jobs = filter_jobs(sbm.jobs_list(from_active=True, from_archived=True))
+    jobs = filter_jobs(sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=True))
     data = []
 
     for job in jobs:
-      res = parse_stdout(job)
       # print('='*50)
-      # pprint.pprint(job)
+      # pprint(job)
+      # print(job.get_stdout())
+      # print('-'*50)
+      
+      res = parse_stdout(job)
       # print(res)
       for model, times in res.items():
         m = re.match(r'(\w+)_(\d+)nodes', job.config_name)
+        print(model)
+        print(times)
         data.append({
           'cluster': job.cluster_name,
           'partition': m.group(1),
           'nodes': int(m.group(2)),
           'model': model,
-          'geomean_time': geometric_mean(times),
-          'std_time': stdev(times),
+          'geomean_time': geometric_mean(times) if len(times) > 1 else times[0],
+          'std_time': stdev(times) if len(times) > 1 else times[0],
           'max_time': max(times),
           'min_time': min(times),
         })
 
     df = pd.DataFrame(data)
-    df.to_csv(OUT_DIR / f'dnnproxies_{sbm.get_cluster_name()}_data.csv')
+    path = OUT_DIR / f'dnnproxies_{sbm.get_cluster_name()}_data.csv'
+    df.to_csv(path)
+    print(f'Data saved to {path.resolve().absolute()}')
 
   print(df)
 
