@@ -6,6 +6,10 @@ haicgu:
   scheduler: slurm
 
   default_conf:
+
+    # TODO delete
+    reservation: "dcn_6"
+
     account: "dcn"
     cpus_per_task: 128
     gpus: 0

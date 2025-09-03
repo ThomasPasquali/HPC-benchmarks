@@ -226,67 +226,67 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
     'classic': 'x',
   }
 
-  # # TEPS and CUT_TEPS vs Nodes
-  # for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
-  #   plt.figure(figsize=(12, 6))
+  # TEPS and CUT_TEPS vs Nodes
+  for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
+    plt.figure(figsize=(12, 6))
 
-  #   x_ticks_nodes = set()
-  #   for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
-  #     impl_group_sorted = impl_group.sort_values('nodes')
-  #     nodes = impl_group_sorted['nodes']
-  #     teps_vals = impl_group_sorted['teps']
-  #     cut_teps_vals = impl_group_sorted['cut_teps']
+    x_ticks_nodes = set()
+    for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
+      impl_group_sorted = impl_group.sort_values('nodes')
+      nodes = impl_group_sorted['nodes']
+      teps_vals = impl_group_sorted['teps']
+      cut_teps_vals = impl_group_sorted['cut_teps']
 
-  #     # linestyle = next(line_styles)
-  #     linestyle = line_styles.get(f'{cluster}-{partition}', ':')
-  #     marker = markers.get(impl, 's')
-  #     label_base = f"{cluster}-{partition}-{impl}"
-  #     plt.plot(nodes, teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} TEPS")
-  #     plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
-  #     x_ticks_nodes |= set(nodes.values)
+      # linestyle = next(line_styles)
+      linestyle = line_styles.get(f'{cluster}-{partition}', ':')
+      marker = markers.get(impl, 's')
+      label_base = f"{cluster}-{partition}-{impl}"
+      plt.plot(nodes, teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} TEPS")
+      plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
+      x_ticks_nodes |= set(nodes.values)
 
-  #   plt.title(f"TEPS and CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
-  #   plt.xlabel("Nodes")
-  #   plt.ylabel("TEPS and CUT_TEPS")
-  #   plt.xticks(sorted(list(x_ticks_nodes)))
-  #   plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-  #   plt.legend(title="Cluster-Partition-Implementation Metric")
-  #   plt.tight_layout()
-  #   path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
-  #   path.parent.mkdir(parents=True, exist_ok=True)
-  #   plt.savefig(path)
-  #   print(f'Plot saved to {path}')
-  #   plt.close()
+    plt.title(f"TEPS and CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
+    plt.xlabel("Nodes")
+    plt.ylabel("TEPS and CUT_TEPS")
+    plt.xticks(sorted(list(x_ticks_nodes)))
+    plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+    plt.legend(title="Cluster-Partition-Implementation Metric")
+    plt.tight_layout()
+    path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(path)
+    print(f'Plot saved to {path}')
+    plt.close()
 
-  # # ONLY CUT_TEPS vs Nodes
-  # for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
-  #   plt.figure(figsize=(12, 6))
+  # ONLY CUT_TEPS vs Nodes
+  for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
+    plt.figure(figsize=(12, 6))
 
-  #   x_ticks_nodes = set()
-  #   for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
-  #     impl_group_sorted = impl_group.sort_values('nodes')
-  #     nodes = impl_group_sorted['nodes']
-  #     cut_teps_vals = impl_group_sorted['cut_teps']
+    x_ticks_nodes = set()
+    for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
+      impl_group_sorted = impl_group.sort_values('nodes')
+      nodes = impl_group_sorted['nodes']
+      cut_teps_vals = impl_group_sorted['cut_teps']
 
-  #     # linestyle = next(line_styles)
-  #     linestyle = line_styles.get(f'{cluster}-{partition}', ':')
-  #     marker = markers.get(impl, 's')
-  #     label_base = f"{cluster}-{partition}-{impl}"
-  #     plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
-  #     x_ticks_nodes |= set(nodes.values)
+      # linestyle = next(line_styles)
+      linestyle = line_styles.get(f'{cluster}-{partition}', ':')
+      marker = markers.get(impl, 's')
+      label_base = f"{cluster}-{partition}-{impl}"
+      plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
+      x_ticks_nodes |= set(nodes.values)
 
-  #   plt.title(f"CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
-  #   plt.xlabel("Nodes")
-  #   plt.ylabel("CUT_TEPS")
-  #   plt.xticks(sorted(list(x_ticks_nodes)))
-  #   plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-  #   plt.legend(title="Cluster-Partition-Implementation Metric")
-  #   plt.tight_layout()
-  #   path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
-  #   path.parent.mkdir(parents=True, exist_ok=True)
-  #   plt.savefig(path)
-  #   print(f'Plot saved to {path}')
-  #   plt.close()
+    plt.title(f"CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
+    plt.xlabel("Nodes")
+    plt.ylabel("CUT_TEPS")
+    plt.xticks(sorted(list(x_ticks_nodes)))
+    plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+    plt.legend(title="Cluster-Partition-Implementation Metric")
+    plt.tight_layout()
+    path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(path)
+    print(f'Plot saved to {path}')
+    plt.close()
 
   # Boxplot of mean barrier time per partition-impl, grouped by (scale, edgefactor)
   # for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
@@ -469,24 +469,31 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
 
 
 
-
 if __name__ == "__main__":
-  if len(sys.argv) > 1 and len(sys.argv) != 3:
-    print(f'Usage: python3 {sys.argv} path/to/summary_aggr path/to/summary')
+  if len(sys.argv) > 1 and (len(sys.argv) - 1) % 2 != 0:
+    print(f'Usage: python3 {sys.argv[0]} path/to/summary_aggr1 path/to/summary1 [path/to/summary_aggr2 path/to/summary2 ...]')
     exit(1)
+  elif len(sys.argv) > 2:
+    df_aggr_list = []
+    df_list = []
 
-  if len(sys.argv) == 3:
-    data_aggr_path = Path(sys.argv[1])
-    data_path = Path(sys.argv[2])
+    for i in range(1, len(sys.argv), 2):
+      data_aggr_path = Path(sys.argv[i])
+      data_path = Path(sys.argv[i + 1])
 
-    if not (data_aggr_path.exists() and data_aggr_path.is_file() and data_path.exists() and data_path.is_file()):
-      print(f'CSV files do not exist')
-      exit(2)
+      if not (data_aggr_path.exists() and data_aggr_path.is_file() and data_path.exists() and data_path.is_file()):
+        print(f'CSV files do not exist: {data_aggr_path}, {data_path}')
+        exit(2)
 
-    print(f'Reading aggregated data from file: "{data_aggr_path}"')
-    df_aggr = pd.read_csv(data_aggr_path)
-    print(f'Reading data from file: "{data_path}"')
-    df = pd.read_csv(data_path)
+      print(f'Reading aggregated data from file: "{data_aggr_path}"')
+      df_aggr = pd.read_csv(data_aggr_path)
+      df_aggr_list.append(df_aggr)
+      print(f'Reading data from file: "{data_path}"')
+      df = pd.read_csv(data_path)
+      df_list.append(df)
+
+    df_aggr = pd.concat(df_aggr_list, ignore_index=True)
+    df = pd.concat(df_list, ignore_index=True)
   else:
     data = defaultdict(list)
     jobs = sbm.jobs_list(from_active=True, from_archived=True, status=[sbm.Status.COMPLETED])
@@ -522,7 +529,13 @@ if __name__ == "__main__":
             volume_matrix[run][src][dst] += volume
             count_matrix[run][src][dst] += n_comms
 
-      impl = 'smallbuf' if 'smallbuf' in program else 'classic'
+
+      impl = 'classic'
+      if 'smallbuf' in program:
+        impl = 'smallbuf'
+      elif 'largebuf' in program:
+        impl = 'largebuf'
+        
       cluster = job.cluster_name
       key = (cluster, partition, impl, scale, edgefactor)
 
@@ -572,7 +585,6 @@ if __name__ == "__main__":
             "total_comm_count": np.sum(count_matrix[run_i]),
             "mean_packet_size": np.mean(np.divide(volume_matrix[run_i], count_matrix[run_i], where=count_matrix[run_i] != 0))
           })
-
 
     df_aggr = pd.DataFrame(df_records_aggr)
     path = OUT_DIR / f"graph500_{sbm.get_cluster_name()}_summary_aggr.csv"

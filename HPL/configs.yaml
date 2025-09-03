@@ -6,10 +6,14 @@ haicgu:
   scheduler: slurm
 
   default_conf:
+
+    # TODO delete
+    reservation: "dcn_6"
+
     account: "dcn"
     cpus_per_task: 128
     gpus: 0
-    time: "01:00:00"
+    time: "02:00:00"
     modules: 
       - "GCC/14.1.0"
       - "OpenMPI/5.0.3"

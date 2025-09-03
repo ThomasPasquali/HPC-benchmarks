@@ -264,10 +264,11 @@ def filter_jobs(jobs: List[sbm.Job]) -> List[sbm.Job]:
 
 
 def main():
-  data_path = Path(sys.argv[1]) if len(sys.argv) > 1 else None
-  if data_path and data_path.exists() and data_path.is_file():
-    print(f'Reading data from file: "{data_path}"')
-    df = pd.read_csv(data_path)
+  data_paths = [Path(p) for p in sys.argv[1:] if Path(p).exists() and Path(p).is_file()]
+  if data_paths:
+    print(f'Reading data from files: {[str(p) for p in data_paths]}')
+    dfs = [pd.read_csv(p) for p in data_paths]
+    df = pd.concat(dfs, ignore_index=True)
   else:
     jobs = filter_jobs(sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=True))
     data = []

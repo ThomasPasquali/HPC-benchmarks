@@ -34,7 +34,7 @@ hpl_PMAP=0
 # -------------------------
 # Derived parameters
 # -------------------------
-totalmem=$((mem * nodes))   # GB
+totalmem=$(awk "BEGIN {print $mem * $nodes}")   # GB
 # Compute N (rounded to multiple of NB)
 N=$(python3 - <<EOF
 import math
@@ -44,6 +44,8 @@ NB = $hpl_NB
 # totalmem in GB, convert to bytes
 val = (totalmem * (1024**3) * nodes / 8.0)**0.5
 N = int(round(val / NB) * NB)
+if nodes >= 4:
+  N = int(0.65*N)
 print(N)
 EOF
 )

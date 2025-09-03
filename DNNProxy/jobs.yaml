@@ -1,7 +1,7 @@
 sequential: true
 
 variables:
-  nodes: [2, 4] #, 6] # , 8]
+  nodes: [2, 4, 6, 8]
 
   models_hardcoded: ['resnet50', 'resnet152', 'dlrm']
 
@@ -10,17 +10,6 @@ variables:
   partition: ["eth", "ib"]
 
 jobs:
-  # Arg1 (#stages) = nodes/4
-  # FIXME not working
-  # - config: "{partition}_4nodes"
-  #   config_jobs:
-  #     - tag: "gpt3"
-  #       command: "mpirun -np 4 gpt3 1 96"
-  # - config: "{partition}_8nodes"
-  #   config_jobs:
-  #     - tag: "gpt3"
-  #       command: "mpirun -np 8 gpt3 2 96"
-
   - config: "{partition}_{nodes}nodes"
     config_jobs:
       - tag: "gpt2"

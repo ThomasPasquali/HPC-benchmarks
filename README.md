@@ -11,12 +11,14 @@ This repository gathers HPC benchmarks:
 - Pointer Chasing
 - ThreadsSynchronization
 
-## List of Distributed-Memory Benchmarks
+## List of Distributed-Memory Benchmarks (estimated runtime)
 
-- Graph500
-- HPL
-- HPCG
-- DNNProxies
+- Graph500 (50 min)
+- HPL (2 hours)
+- HPCG (40 min)
+- DNNProxies (15 min)
+
+*Estimated runtimes refer to experiments up to 8 nodes on a single partition*
 
 
 Please refer to `README` of the individual folders for more details (WIP)

@@ -1,10 +1,11 @@
-# Distributed Deep Neural Network Proxies (Training)
+# High Performance Conjugate Gradient
 
 ## Build
 
 ```bash
 # Make sure to have modules/paths setup correctly
-make
+# Internally uses git and CMake
+./download_and_build.sh
 ```
 
 ## Run
@@ -16,18 +17,18 @@ sbmc -f configs.yaml -ow
 sbml -f jobs.yaml
 ```
 
-## Generate Data + (local) Plots
+## Generate Data
 
 Once all experiments are done:
 
 ```bash
-python3 plots.py
+python3 parse_results.py
 ```
 
 ## Plots with data from Multiple Sources
 
-1) Sync the `results/dnnproxies_<cluster>_data.csv` files on one machine
+1) Sync the `hpcg_results_<cluster>.csv` files on one machine
 2) Run:
 ```bash
-python3 plots.py path/to/dnnproxies_<cluster1>_data.csv path/to/dnnproxies_<cluster2>_data.csv ...
+python3 plots.py hpcg_results_<cluster1>.csv hpcg_results_<cluster2>.csv ...
 ```

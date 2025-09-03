@@ -31,20 +31,20 @@ def main():
   df["cpus"] = df["cpus"].astype(int)
 
   # Plot scaling of Time
-  plt.figure(figsize=(8,6))
-  for partition, grp in df.groupby("partition"):
-    grp_sorted = grp.sort_values("nodes")
-    plt.plot(grp_sorted["nodes"], grp_sorted["Time"], marker="o", label=partition)
-  plt.xticks(df["nodes"].unique())
-  plt.xlabel("Nodes")
-  plt.ylabel("Time (s)")
-  plt.title("HPL Scaling - Runtime")
-  plt.legend()
-  plt.grid(True)
-  path = Path(args.out) / "hpl_scaling_time.png"
-  path.parent.mkdir(parents=True, exist_ok=True)
-  plt.savefig(path, dpi=150, bbox_inches="tight")
-  print(f"Plot saved as {path.absolute()}")
+  # plt.figure(figsize=(8,6))
+  # for partition, grp in df.groupby("partition"):
+  #   grp_sorted = grp.sort_values("nodes")
+  #   plt.plot(grp_sorted["nodes"], grp_sorted["Time"], marker="o", label=partition)
+  # plt.xticks(df["nodes"].unique())
+  # plt.xlabel("Nodes")
+  # plt.ylabel("Time (s)")
+  # plt.title("HPL Scaling - Runtime")
+  # plt.legend()
+  # plt.grid(True)
+  # path = Path(args.out) / "hpl_scaling_time.png"
+  # path.parent.mkdir(parents=True, exist_ok=True)
+  # plt.savefig(path, dpi=150, bbox_inches="tight")
+  # print(f"Plot saved as {path.absolute()}")
 
   # Plot scaling of Gflops
   plt.figure(figsize=(8,6))
