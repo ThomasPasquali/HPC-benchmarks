@@ -5,7 +5,6 @@ variables:
 
   models_hardcoded: ['resnet50', 'resnet152', 'dlrm']
 
-  # partition: ["nanjing"]
   # partition: ["leonardo"]
   partition: ["eth", "ib"]
 

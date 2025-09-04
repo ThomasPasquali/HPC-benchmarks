@@ -2,14 +2,15 @@ sequential: true
 
 variables:
   nodes: [1, 2, 4, 8]
-  # partition: ["leonardo"]
-  partition: ["eth", "ib"]
+  partition: ["nanjing"]
+  which: ['inter']
 
   bin: ["graph500_reference_bfs", "graph500_reference_bfs_smallbuf", "graph500_reference_bfs_largebuf"]
   scale: [14, 21]
   edgefactor: [8, 32]
+  
 
-command: "mpirun -np {nodes} ./bin/{bin} {scale} {edgefactor}"
+command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -N 1 --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{which} ./bin/{bin} {scale} {edgefactor}"
 
 jobs:
   - config: "{partition}_{nodes}nodes"
