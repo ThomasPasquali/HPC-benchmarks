@@ -1,0 +1,22 @@
+sequential: true
+
+variables:
+  nodes: [2, 4, 6, 8]
+
+  models_hardcoded: ['resnet50', 'resnet152', 'dlrm']
+
+  partition: ["nanjing"]
+  which: ['inter']
+
+jobs:
+  - config: "{partition}_{nodes}nodes"
+    config_jobs:
+      - tag: "gpt2"
+        command: "mpirun --allow-run-as-root -s PATH -x LD_LIBRARY_PATH -N 1 --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{which} ./gpt2 48 {nodes}"
+
+      - tag: "bert"
+        command: "mpirun --allow-run-as-root -s PATH -x LD_LIBRARY_PATH -N 1 --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{which} ./bert 24 {nodes}"
+
+      - tag: "{models_hardcoded}"
+        command: "mpirun --allow-run-as-root -s PATH -x LD_LIBRARY_PATH -N 1 --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{which} ./{models_hardcoded}"
+
