@@ -270,7 +270,7 @@ def main():
     dfs = [pd.read_csv(p) for p in data_paths]
     df = pd.concat(dfs, ignore_index=True)
   else:
-    jobs = filter_jobs(sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=True))
+    jobs = filter_jobs(sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=False))
     data = []
 
     for job in jobs:

@@ -496,14 +496,22 @@ if __name__ == "__main__":
     df = pd.concat(df_list, ignore_index=True)
   else:
     data = defaultdict(list)
-    jobs = sbm.jobs_list(from_active=True, from_archived=True, status=[sbm.Status.COMPLETED])
+    jobs = sbm.jobs_list(from_active=True, from_archived=False, status=[sbm.Status.COMPLETED])
     for job in jobs:
       m = re.match(r'(\w+)_(\d+)nodes', job.config_name)
       if not m:
         continue
 
-      scale, edgefactor = job.command.split(' ')[4:6]
-      program = job.command.split(' ')[3]
+      command_parts = job.command.split(' ')
+      edgefactor = command_parts[-1]
+      scale = command_parts[-2]
+      program = None
+      for p in command_parts:
+        if 'graph500_reference_bfs' in p:
+          program = p
+          break
+      if p is None:
+        raise Exception(f'Could not find executable in command "{job.command}"')
       partition, nodes_str = m.groups()
       nodes = int(nodes_str)
 
