@@ -1,0 +1,15 @@
+# Sequential is mandatory
+sequential: true
+
+variables:
+  nodes: [1, 2, 4, 8]
+  partition: ["nanjing"]
+  which: ['inter']
+
+preprocess: "./gen_dat_file.sh {nodes} {nodes}"
+command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -N 1 --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{which} ./xhpl"
+
+jobs:
+  - config: "{partition}_{nodes}nodes"
+    config_jobs:
+      - tag: "hpl_{partition}"
