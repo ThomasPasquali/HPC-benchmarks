@@ -7,7 +7,7 @@ variables:
   which: ['inter']
 
 preprocess: "mkdir -p hpcg-out; cd hpcg-out; mkdir -p {partition}; cd {partition}; cp ../../hpcg.dat ."
-command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -N 1 --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{which} ../../hpcg-cpu/build/xhpcg"
+command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{which} ../../hpcg-cpu/build/xhpcg"
 
 jobs:
   - config: "{partition}_{nodes}nodes"
