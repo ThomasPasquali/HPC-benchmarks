@@ -36,9 +36,24 @@ CACHE_SIZES = {
   'baldo':      [(4 * 1024 * 1024,  'L1d'), (64 * 1024 * 1024, 'L2'),  (0,                 '')        ],# (512 * 1024 * 1024, 'L3')],
 }
 
+CLUSTER_NAMES_MAP = {
+  'nanjing': 'NJ',
+  'haicgu': 'HAICGU',
+  'leonardo': 'LEO',
+}
+
+PARTITION_NAMES_MAP = {
+  'ib': 'ib',
+  'eth': 'eth',
+  'NSLB': 'nslb',
+  'plain': 'default',
+}
+
 # Plots style
 MARKERS_LIST = ["o", "s", "^", "d", "x", "P", "*", "v", ">"]
-COLORS_CYCLE = itertools.cycle(plt.rcParams['axes.prop_cycle'].by_key()['color'])
-LINESTYLES_CYCLE = itertools.cycle(["-", ":", "-.", "--"])
+COLORS_LIST = list(plt.rcParams['axes.prop_cycle'].by_key()['color'])
+COLORS_CYCLE = itertools.cycle(COLORS_LIST)
+LINESTYLES_LIST = ["-", ":", "-.", "--"]
+LINESTYLES_CYCLE = itertools.cycle(LINESTYLES_LIST)
 
 SET_FIG_TITLE = False

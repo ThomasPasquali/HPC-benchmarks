@@ -77,7 +77,7 @@ def parse_hpl_outputs(jobs: List[sbm.Job]):
 
 if __name__ == "__main__":
   df = parse_hpl_outputs(sbm.jobs_list(status=[sbm.Status.COMPLETED]))
-  
+  df["cluster"] = sbm.get_cluster_name()
   print(df)
   
   OUT_CSV=Path(f"results/hpl_results_{sbm.get_cluster_name()}.csv")

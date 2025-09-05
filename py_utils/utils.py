@@ -1,5 +1,7 @@
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.patches import Rectangle
+from .constants import LINESTYLES_LIST, COLORS_LIST, MARKERS_LIST
+import itertools
 
 def add_zoom_inset(
   ax, zoom_region, inset_position=(0.6, 0.6, 0.3, 0.3),
@@ -91,3 +93,12 @@ def add_zoom_inset(
     ax.add_patch(rect)
 
   return axins
+
+def create_linestyle_map(values):
+  return {v: ls for v, ls in zip(values, itertools.cycle(LINESTYLES_LIST))}
+
+def create_color_map(values):
+  return {v: color for v, color in zip(values, itertools.cycle(COLORS_LIST))}
+  
+def create_marker_map(values):
+  return {v: color for v, color in zip(values, itertools.cycle(MARKERS_LIST))}

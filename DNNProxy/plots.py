@@ -11,6 +11,10 @@ import matplotlib.pyplot as plt
 from typing import Dict, List, Union, Tuple
 import re
 
+sys.path.append(str(Path(__file__).parent.parent))
+from py_utils.constants import *
+from py_utils.utils import create_color_map
+
 FONT_TITLE = 18
 FONT_AXES = 18
 FONT_TICKS = 16
@@ -26,6 +30,16 @@ plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 OUT_DIR = Path('results')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+# Use the model names before the mapping
+MODELS_BLACKLIST = ['ResNet-152']
+MODEL_NAME_MAP = {
+  'DLRM': 'DLRM',
+  'ResNet-152': 'ResNet-152',
+  'bert': 'BERT',
+  'gpt2': 'GPT2',
+  'resnet-allreduce': 'ResNet-50-AllRed',
+}
+
 def plot_scaling_by_model(
   df: pd.DataFrame,
   clusters_partitions: Union[Tuple[str, str], List[Tuple[str, str]]],
@@ -35,7 +49,7 @@ def plot_scaling_by_model(
   time_col: str = "geomean_time",
   time_std_col: str = "std_time",
   model_col: str = "model",
-  figsize: tuple = (10, 6),
+  figsize: tuple = (8, 12),
   marker: str = "o"
 ) -> plt.Axes:
   """
@@ -82,23 +96,39 @@ def plot_scaling_by_model(
     slice_df.sort_values(node_col, inplace=True)
     style = next(line_styles)
 
-    # Plot each model with a distinct color, and line style per (cluster, partition)
+    # Build a global model list so offsets are consistent across all groups
+    model_list = list(slice_df[model_col].unique())
+    n_models = len(model_list)
+
     for model, grp in slice_df.groupby(model_col):
       label = f"{model} ({cluster}-{partition})"
+      
+      # Global offset index
+      # model_idx = model_list.index(model)
+      # Spread offsets evenly around 0
+      offset = 0 # (model_idx - (n_models - 1) / 2) * 0.15 if n_models > 1 else 0
+
+      # Apply offset to x values
+      x_vals = grp[node_col] + offset
+
       ax.errorbar(
-        grp[node_col],
+        x_vals,
         grp[time_col],
         yerr=grp[time_std_col],
         label=label,
         marker=marker,
         linestyle=style,
-        color=model_color_map[str(model)] if model_color_map else None
+        color=model_color_map[str(model)] if model_color_map else None,
+        capsize=5,
+        capthick=1.5,
+        elinewidth=1.5,
+        ecolor=model_color_map[str(model)] if model_color_map else None,
       )
 
   all_xticks = sorted(df[node_col].unique())
   ax.set_xticks(all_xticks)
   ax.set_xlabel("Number of Nodes")
-  ax.set_ylabel("Geometric Mean Time (s)")
+  ax.set_ylabel("Geometric Mean Time [s]")
 
   if len(clusters_partitions) == 1:
     cluster, partition = clusters_partitions[0]
@@ -107,7 +137,7 @@ def plot_scaling_by_model(
     ax.set_title("Strong Scaling Comparison Across Clusters/Partitions")
 
   ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-  ax.legend(title="Model (Cluster-Partition)")
+  ax.legend(title="Model (Cluster-Partition/Configuration)")
   fig.tight_layout()
 
   return ax
@@ -123,7 +153,7 @@ def plot_performance_ratio(
   node_col: str = "nodes",
   time_col: str = "geomean_time",
   model_col: str = "model",
-  figsize: tuple = (10, 6),
+  figsize: tuple = (8, 12),
   marker: str = "o",
   is_barplot=False,
 ) -> plt.Axes:
@@ -207,8 +237,8 @@ def plot_performance_ratio(
     
   ax.axhline(1.0, color='gray', linestyle='--', linewidth=1, label='Parity')
   ax.set_xlabel("Number of Nodes")
-  ax.set_ylabel(f"Performance Ratio ({ref_cluster}-{ref_partition} / {cmp_cluster}-{cmp_partition})")
-  ax.set_title(f"Performance Ratio: {ref_cluster}-{ref_partition} vs. {cmp_cluster}-{cmp_partition}")
+  ax.set_ylabel(f"Runtime Ratio ({ref_cluster}-{ref_partition} / {cmp_cluster}-{cmp_partition})")
+  ax.set_title(f"Runtime Ratio: {ref_cluster}-{ref_partition} vs. {cmp_cluster}-{cmp_partition}")
   ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
   ax.legend(title="Model")
   fig.tight_layout()
@@ -234,7 +264,7 @@ def parse_stdout(job: sbm.Job) -> Dict[str, List[float]]:
     if '(allreduce)' in stdout:
       model = 'resnet-allreduce'
     else:
-      model = 'resnet-ring'
+      model = 'resnet-ring' # FIXME does not appear in results
       
   if model is None:
     raise Error(f'Could not find the model in output of job: {job}\n{stdout}')
@@ -269,6 +299,13 @@ def main():
     print(f'Reading data from files: {[str(p) for p in data_paths]}')
     dfs = [pd.read_csv(p) for p in data_paths]
     df = pd.concat(dfs, ignore_index=True)
+    # Map names
+    df['cluster'] = df['cluster'].map(CLUSTER_NAMES_MAP)
+    df['partition'] = df['partition'].map(PARTITION_NAMES_MAP)
+    df['model'] = df['model'].map(MODEL_NAME_MAP)
+    # Filter
+    if MODELS_BLACKLIST:
+      df = df[~df['model'].isin(MODELS_BLACKLIST)]
   else:
     jobs = filter_jobs(sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=False))
     data = []
@@ -303,16 +340,18 @@ def main():
 
   print(df)
 
-  color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+  clusters = df['cluster'].unique()
   models = df['model'].unique()
-  model_color_map = dict(zip(models, itertools.cycle(color_cycle)))
+  model_color_map = create_color_map(models)
 
   for cluster, partition in df.groupby(["cluster", "partition"]).groups.keys():
     plot_scaling_by_model(df, clusters_partitions=(cluster, partition), model_color_map=model_color_map)
-    path = OUT_DIR / f'DNNProxy_{cluster}_{partition}.png'
-    plt.savefig(path)
+    filename = f"DNNProxy_scaling_{cluster}-{partition}"
+    path = OUT_DIR / "scaling_individual" / filename
+    path.parent.mkdir(exist_ok=True, parents=True)
+    plt.savefig(path, dpi=200)
     plt.close()
-    print(f'Plot saved to {path.resolve().absolute()}')
+    print(f"Plot saved to {path.resolve().absolute()}")
 
   combos = df[["cluster", "partition"]].drop_duplicates()
   pairs = [(a, b) for a in combos.itertuples(index=False, name=None) for b in combos.itertuples(index=False, name=None) if a != b]
@@ -323,10 +362,12 @@ def main():
         ref_cluster, ref_partition,
         cmp_cluster, cmp_partition
       )
-      filename = f"DNNProxy_ratio_{ref_cluster}_{ref_partition}_vs_{cmp_cluster}_{cmp_partition}.png"
-      plt.savefig(OUT_DIR / filename)
+      filename = f"DNNProxy_ratio_line_{ref_cluster}-{ref_partition}_vs_{cmp_cluster}-{cmp_partition}.png"
+      path = OUT_DIR / "ratio_line" / filename
+      path.parent.mkdir(exist_ok=True, parents=True)
+      plt.savefig(path, dpi=200)
       plt.close()
-      print(f"Plot saved to {filename}")
+      print(f"Plot saved to {path.resolve().absolute()}")
 
       plot_performance_ratio(
         df,
@@ -334,10 +375,12 @@ def main():
         cmp_cluster, cmp_partition,
         is_barplot=True,
       )
-      filename = f"DNNProxy_ratio_barplot_{ref_cluster}_{ref_partition}_vs_{cmp_cluster}_{cmp_partition}.png"
-      plt.savefig(OUT_DIR / filename)
+      filename = f"DNNProxy_ratio_boxplot_{ref_cluster}-{ref_partition}_vs_{cmp_cluster}-{cmp_partition}.png"
+      path = OUT_DIR / "ratio_boxplot" / filename
+      path.parent.mkdir(exist_ok=True, parents=True)
+      plt.savefig(path, dpi=200)
       plt.close()
-      print(f"Plot saved to {filename}")
+      print(f"Plot saved to {path.resolve().absolute()}")
     except ValueError as e:
       print(f"Skipping {ref_cluster}/{ref_partition} vs {cmp_cluster}/{cmp_partition}: {e}")
 
@@ -346,13 +389,14 @@ def main():
   for (ref_cluster, ref_partition), (cmp_cluster, cmp_partition) in pairs:
     try:
       plot_scaling_by_model(df, clusters_partitions=[(ref_cluster, ref_partition), (cmp_cluster, cmp_partition)], model_color_map=model_color_map)
-      path = OUT_DIR / f'DNNProxy_{ref_cluster}_{ref_partition}__{cmp_cluster}_{cmp_partition}.png'
-      plt.savefig(path)
+      filename = f"DNNProxy_scaling_comp_{ref_cluster}-{ref_partition}_vs_{cmp_cluster}-{cmp_partition}.png"
+      path = OUT_DIR / "scaling_comp" / filename
+      path.parent.mkdir(exist_ok=True, parents=True)
+      plt.savefig(path, dpi=200)
       plt.close()
-      print(f'Plot saved to {path.resolve().absolute()}')
+      print(f"Plot saved to {path.resolve().absolute()}")
     except ValueError as e:
       print(f"Skipping {ref_cluster}/{ref_partition} vs {cmp_cluster}/{cmp_partition}: {e}")
-
 
 
 if __name__ == "__main__":

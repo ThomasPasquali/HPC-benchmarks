@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.constants import *
+from py_utils.utils import create_color_map, create_linestyle_map
 
-FONT_LEGEND += 4
-plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
-plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
+plt.rc('axes', titlesize=FONT_AXES - 2)     # fontsize of the axes title
+plt.rc('axes', labelsize=FONT_AXES - 2)     # fontsize of the x and y labels
 plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
 plt.rc('ytick', labelsize=FONT_TICKS)   # fontsize of the tick labels
-plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
+plt.rc('legend', fontsize=FONT_LEGEND + 3)  # legend fontsize
 plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 
 def main():
@@ -29,6 +29,12 @@ def main():
   # Ensure correct dtypes
   df["nodes"] = df["nodes"].astype(int)
   df["cpus"] = df["cpus"].astype(int)
+
+  # Map names
+  df['cluster'] = df['cluster'].map(CLUSTER_NAMES_MAP)
+  df['partition'] = df['partition'].map(PARTITION_NAMES_MAP)
+
+  print(df)
 
   # Plot scaling of Time
   # plt.figure(figsize=(8,6))
@@ -47,18 +53,32 @@ def main():
   # print(f"Plot saved as {path.absolute()}")
 
   # Plot scaling of Gflops
-  plt.figure(figsize=(8,6))
-  for partition, grp in df.groupby("partition"):
-    grp_sorted = grp.sort_values("nodes")
-    plt.plot(grp_sorted["nodes"], grp_sorted["Gflops"], marker="o", label=partition)
+  plt.figure(figsize=(10, 7))
+  
+  cluster_color_map = create_color_map(df.sort_values('cluster')["cluster"].unique())
+
+  for cluster, grp_cluster in df.groupby("cluster"):
+    partition_linestyles = create_linestyle_map(grp_cluster["partition"].unique())
+
+    for partition, grp_cluster_partition in grp_cluster.groupby("partition"):
+      grp_sorted = grp_cluster_partition.sort_values(["nodes",'partition'])
+      plt.plot(
+        grp_sorted["nodes"],
+        grp_sorted["Gflops"],
+        marker="o",
+        label=f'{cluster}-{partition}',
+        color=cluster_color_map[cluster],
+        linestyle=partition_linestyles[partition],
+      )
   plt.xticks(df["nodes"].unique())
   plt.xlabel("Nodes")
-  plt.ylabel("GFLOPS")
-  plt.title("HPL Scaling - FLOPS")
+  plt.ylabel("GFLOPs")
+  plt.title("HPL Scaling")
   plt.legend()
+  plt.tight_layout()
   plt.grid(True)
-  path = Path(args.out) / "hpl_scaling_gflops.png"
-  plt.savefig(path, dpi=150, bbox_inches="tight")
+  path = Path(args.out) / "HPL_Scaling_GFLOPs.png"
+  plt.savefig(path, dpi=200, bbox_inches="tight")
   print(f"Plot saved as {path.absolute()}")
 
 

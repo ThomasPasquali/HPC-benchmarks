@@ -1,4 +1,3 @@
-import itertools
 from pprint import pprint
 import re
 from collections import defaultdict
@@ -10,6 +9,10 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 import sbatchman as sbm
+
+sys.path.append(str(Path(__file__).parent.parent))
+from py_utils.constants import *
+from py_utils.utils import create_color_map, create_linestyle_map, create_marker_map
 
 FONT_TITLE = 18
 FONT_AXES = 18
@@ -216,77 +219,72 @@ def parse_metrics_file(filepath: Path, rank_filter=None, run_filter=None) -> Tup
 
 
 def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
-  # line_styles = itertools.cycle(["-", "--", "-.", ":"])
-  line_styles = {
-    'haicgu-ib': '-',
-    'haicgu-eth': '--',
-  }
-  markers = {
-    'smallbuf': 'o',
-    'classic': 'x',
-  }
+  cluster_color_map = create_color_map(df_aggr.sort_values('cluster')['cluster'].unique())
+  partition_linestyle_map = create_linestyle_map(df_aggr.sort_values('partition')['partition'].unique())
+  implementation_marker_map = create_marker_map(df_aggr.sort_values('impl')['impl'].unique())
 
   # TEPS and CUT_TEPS vs Nodes
   for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 12))
 
     x_ticks_nodes = set()
     for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
       impl_group_sorted = impl_group.sort_values('nodes')
       nodes = impl_group_sorted['nodes']
       teps_vals = impl_group_sorted['teps']
-      cut_teps_vals = impl_group_sorted['cut_teps']
+      teps_or_cut_teps_vals = impl_group_sorted['cut_teps']
 
-      # linestyle = next(line_styles)
-      linestyle = line_styles.get(f'{cluster}-{partition}', ':')
-      marker = markers.get(impl, 's')
+      color = cluster_color_map[cluster]
+      linestyle = partition_linestyle_map[partition]
+      marker = implementation_marker_map[impl]
       label_base = f"{cluster}-{partition}-{impl}"
-      plt.plot(nodes, teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} TEPS")
-      plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
+      plt.plot(nodes, teps_vals, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}-TEPS")
+      plt.plot(nodes, teps_or_cut_teps_vals, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}-CUT TEPS")
       x_ticks_nodes |= set(nodes.values)
 
-    plt.title(f"TEPS and CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
+    plt.title(f"Graph500 Scaling - Scale={scale}, Edgefactor={ef}")
     plt.xlabel("Nodes")
-    plt.ylabel("TEPS and CUT_TEPS")
+    plt.ylabel("TEPS and CUT TEPS")
     plt.xticks(sorted(list(x_ticks_nodes)))
     plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-    plt.legend(title="Cluster-Partition-Implementation Metric")
+    plt.legend(title="Cluster-Partition/Config-Implementation")
     plt.tight_layout()
-    path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
+    path = OUT_DIR / 'scaling' / f'Graph500_scaling_s{scale}_ef{ef}.png'
     path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(path)
     print(f'Plot saved to {path}')
     plt.close()
 
-  # ONLY CUT_TEPS vs Nodes
-  for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
-    plt.figure(figsize=(12, 6))
+  # ONLY TEPS or CUT_TEPS Scaling
+  for metric in ['teps', 'cut_teps']:
+    for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
+      plt.figure(figsize=(12, 12))
 
-    x_ticks_nodes = set()
-    for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
-      impl_group_sorted = impl_group.sort_values('nodes')
-      nodes = impl_group_sorted['nodes']
-      cut_teps_vals = impl_group_sorted['cut_teps']
+      x_ticks_nodes = set()
+      for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
+        impl_group_sorted = impl_group.sort_values('nodes')
+        nodes = impl_group_sorted['nodes']
+        teps_or_cut_teps_vals = impl_group_sorted[metric]
 
-      # linestyle = next(line_styles)
-      linestyle = line_styles.get(f'{cluster}-{partition}', ':')
-      marker = markers.get(impl, 's')
-      label_base = f"{cluster}-{partition}-{impl}"
-      plt.plot(nodes, cut_teps_vals, marker=marker, linestyle=linestyle, label=f"{label_base} CUT_TEPS")
-      x_ticks_nodes |= set(nodes.values)
+        color = cluster_color_map[cluster]
+        linestyle = partition_linestyle_map[partition]
+        marker = implementation_marker_map[impl]
+        label_base = f"{cluster}-{partition}-{impl}"
+        plt.plot(nodes, teps_or_cut_teps_vals, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}")
+        x_ticks_nodes |= set(nodes.values)
 
-    plt.title(f"CUT_TEPS vs Nodes - Scale={scale}, Edgefactor={ef}")
-    plt.xlabel("Nodes")
-    plt.ylabel("CUT_TEPS")
-    plt.xticks(sorted(list(x_ticks_nodes)))
-    plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-    plt.legend(title="Cluster-Partition-Implementation Metric")
-    plt.tight_layout()
-    path = OUT_DIR / 'scaling' / f'Graph500_teps_vs_nodes_s{scale}_ef{ef}.png'
-    path.parent.mkdir(parents=True, exist_ok=True)
-    plt.savefig(path)
-    print(f'Plot saved to {path}')
-    plt.close()
+      plt.title(f"Graph500 Scaling - Scale={scale}, Edgefactor={ef}")
+      plt.xlabel("Nodes")
+      plt.ylabel(metric.capitalize())
+      plt.xticks(sorted(list(x_ticks_nodes)))
+      plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
+      plt.legend(title="Cluster-Partition/Config-Implementation")
+      plt.tight_layout()
+      path = OUT_DIR / 'scaling' / f'Graph500_scaling_{metric}_s{scale}_ef{ef}.png'
+      path.parent.mkdir(parents=True, exist_ok=True)
+      plt.savefig(path)
+      print(f'Plot saved to {path}')
+      plt.close()
 
   # Boxplot of mean barrier time per partition-impl, grouped by (scale, edgefactor)
   # for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
@@ -494,6 +492,12 @@ if __name__ == "__main__":
 
     df_aggr = pd.concat(df_aggr_list, ignore_index=True)
     df = pd.concat(df_list, ignore_index=True)
+    
+    # Map names
+    df['cluster'] = df['cluster'].map(CLUSTER_NAMES_MAP)
+    df['partition'] = df['partition'].map(PARTITION_NAMES_MAP)
+    df_aggr['cluster'] = df_aggr['cluster'].map(CLUSTER_NAMES_MAP)
+    df_aggr['partition'] = df_aggr['partition'].map(PARTITION_NAMES_MAP)
   else:
     data = defaultdict(list)
     jobs = sbm.jobs_list(from_active=True, from_archived=False, status=[sbm.Status.COMPLETED])
