@@ -6,10 +6,7 @@ haicgu:
   scheduler: slurm
 
   default_conf:
-
-    # TODO delete
-    reservation: "dcn_6"
-
+    # reservation: "dcn_6"
     account: "dcn"
     cpus_per_task: 128
     gpus: 0
@@ -46,6 +43,8 @@ leonardo:
       - "openmpi/4.1.6--gcc--12.2.0-cuda-12.2"
     env:
       - "SKIP_VALIDATION=1"
+      - "OMP_PROC_BIND=true"
+      - "OMP_NUM_THREADS=32"
 
   configs:
     - name: "leonardo_{nodes}nodes"
@@ -58,6 +57,8 @@ nanjing:
   default_conf:
     env:
       - "SKIP_VALIDATION=1"
+      - "OMP_PROC_BIND=true"
+      - "OMP_NUM_THREADS=128"
       - "PATH=/root/hpc/build/gcc/bin:/root/hpc/build/bin:$PATH"
       - "LD_LIBRARY_PATH=/root/hpc/build/gcc/lib64:/root/hpc/build/lib:$LD_LIBRARY_PATH"
 
