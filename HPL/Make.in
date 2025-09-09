@@ -79,26 +79,22 @@ HPLlib       = $(LIBdir)/libhpl.a
 # ----------------------------------------------------------------------
 # MPinc tells the  C  compiler where to find the Message Passing library
 # header files,  MPlib  is defined  to be the name of  the library to be
-# used. The variable MPdir is only used for defining MPinc and MPlib.
+# used.
 #
-# MPdir        = /opt/intel/mpi/4.1.0
-# MPinc        = -I$(MPdir)/include64
-# MPlib        = $(MPdir)/lib64/libmpi.a
+MPinc        = -I#MPinc#
+MPlib        = -L#MPlib#
+MPname       = -l#MPname#
 #
 # ----------------------------------------------------------------------
 # - Linear Algebra library (BLAS or VSIPL) -----------------------------
 # ----------------------------------------------------------------------
 # LAinc tells the  C  compiler where to find the Linear Algebra  library
 # header files,  LAlib  is defined  to be the name of  the library to be
-# used. The variable LAdir is only used for defining LAinc and LAlib.
+# used. 
 #
-LAdir        = $(EBROOTBLIS)
-ifndef  LAinc
-LAinc        = $(LAdir)/include/
-endif
-ifndef  LAlib
-LAlib        = #LAlib#
-endif
+LAinc        = -I#LAinc#
+LAlib        = -L#LAlib#
+LAname        = -l#LAname#
 #
 # ----------------------------------------------------------------------
 # - F77 / C interface --------------------------------------------------
@@ -145,8 +141,8 @@ F2CDEFS      = -DAdd__ -DF77_INTEGER=int -DStringSunStyle
 # - HPL includes / libraries / specifics -------------------------------
 # ----------------------------------------------------------------------
 #
-HPL_INCLUDES = -I$(INCdir) -I$(INCdir)/$(ARCH) -I$(LAinc) $(MPinc)
-HPL_LIBS     = $(HPLlib) $(LAlib) $(MPlib)
+HPL_INCLUDES = -I$(INCdir) -I$(INCdir)/$(ARCH) $(LAinc) $(MPinc)
+HPL_LIBS     = $(HPLlib) $(LAlib) $(LAname) $(MPlib) $(MPname)
 #
 # - Compile time options -----------------------------------------------
 #

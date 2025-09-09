@@ -2,22 +2,26 @@
 
 set -e
 
-# mkdir hpcg-out
 ARCH=$1
+
 LAlib=$2
-HPL_PATH=${3:-'hpl'}
+LAname=$3
+LAinc=$4
+
+MPlib=$5
+MPname=$6
+MPinc=$7
+
+HPL_PATH=${8:-'hpl'}
 TOPdir="$(pwd)/${HPL_PATH}"
 
-if [[ -z "$ARCH" || -z "$LAlib" ]]; then
+if [[ -z "$ARCH" || -z "$LAlib" || -z "$LAinc" || -z "$MPlib" || -z "$MPname" || -z "$MPinc" ]]; then
   echo "Error: Missing required arguments."
-  echo "Usage: $0 <ARCH> <LAlib> [HPL_PATH]"
+  echo "Usage: $0 <ARCH> <LAlib> <LAname> <LAinc> <MPlib> <MPname> <MPinc> [HPL_PATH]"
   exit 1
 fi
 
-sed "s|#ARCH#|${ARCH}|g; s|#LAlib#|${LAlib}|g; s|#TOPdir#|${TOPdir}|g" Make.in > Make.out
-
-cxx_compiler=g++
-additional_cmake_config=
+sed "s|#ARCH#|${ARCH}|g; s|#LAlib#|${LAlib}|g; s|#LAname#|${LAname}|g; s|#LAinc#|${LAinc}|g; s|#MPlib#|${MPlib}|g; s|#MPname#|${MPname}|g; s|#MPinc#|${MPinc}|g; s|#TOPdir#|${TOPdir}|g" Make.in > Make.out
 
 if [[ ! -d ${HPL_PATH} ]]; then
   curl -O https://www.netlib.org/benchmark/hpl/hpl-2.3.tar.gz

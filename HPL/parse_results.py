@@ -58,6 +58,7 @@ def parse_hpl_outputs(jobs: List[sbm.Job]):
           break
           
       record = {
+        "cluster": job.cluster_name,
         "partition": partition,
         "nodes": nodes,
         "cpus": cpus,
