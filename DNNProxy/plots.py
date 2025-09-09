@@ -1,15 +1,11 @@
 from csv import Error
 import itertools
 from pathlib import Path
-from pprint import pprint
-from statistics import geometric_mean, stdev
 import sys
-import sbatchman as sbm
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from typing import Dict, List, Union, Tuple
-import re
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.constants import *
@@ -31,13 +27,14 @@ OUT_DIR = Path('results')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Use the model names before the mapping
-MODELS_BLACKLIST = ['ResNet-152']
+MODELS_BLACKLIST = [] # ['ResNet-152']
 MODEL_NAME_MAP = {
   'DLRM': 'DLRM',
   'ResNet-152': 'ResNet-152',
   'bert': 'BERT',
   'gpt2': 'GPT2',
-  'resnet-allreduce': 'ResNet-50-AllRed',
+  'ResNet-50-allreduce': 'ResNet-50-AllRed',
+  'ResNet-50-ring': 'ResNet-50-Ring',
 }
 
 def plot_scaling_by_model(
@@ -245,104 +242,173 @@ def plot_performance_ratio(
 
   return ax
 
+PLOTS_COMPARISON_SHOW_STD = False
+def plot_barplot_comparisons(df: pd.DataFrame, min_coverage_ratio=0.5):
+  df['cluster-partition'] = df['cluster'] + '-' + df['partition']
+  cluster_partitions = df['cluster-partition'].unique()
+  models = sorted(df["model"].unique())
 
-def parse_stdout(job: sbm.Job) -> Dict[str, List[float]]:
-  stdout = job.get_stdout()
-  if stdout is None:
-    raise Exception(f'Job stdout empty:\n{job}')
-  
-  model = None
-  if 'GPT2-' in stdout:
-    model = 'gpt2'
-  elif 'Bert-' in stdout:
-    model = 'bert'
-  elif 'ResNet-152' in stdout:
-    model = 'ResNet-152'
-  elif 'DLRM ' in stdout:
-    model = 'DLRM'
-  elif 'ResNet-50' in stdout:
-    if '(allreduce)' in stdout:
-      model = 'resnet-allreduce'
-    else:
-      model = 'resnet-ring' # FIXME does not appear in results
+  # Assign unique colors to implementations
+  model_colors = create_color_map(models)
+
+  for cp1, cp2 in itertools.combinations(cluster_partitions, 2):
+    fig, ax = plt.subplots(figsize=(12, 5))
+    bar_width = 0.8 / len(models)
+    miny, maxy = np.inf, -np.inf
+
+    # --- Build cpu_data: {nodes: {model: speedup, std_cp1, std_cp2}} ---
+    cpu_data = {}
+    for model in models:
+      b1_df = df[(df["model"] == model) & (df["cluster-partition"] == cp1)]
+      b2_df = df[(df["model"] == model) & (df["cluster-partition"] == cp2)]
+      merged = pd.merge(
+        b1_df, b2_df,
+        on="nodes",
+        suffixes=(f"_{cp1}", f"_{cp2}")
+      )
+      for _, row in merged.iterrows():
+        cpu = int(row["nodes"])
+        if cpu not in cpu_data:
+          cpu_data[cpu] = {}
+        r1 = row[f"geomean_time_{cp1}"]
+        r2 = row[f"geomean_time_{cp2}"]
+        spd = np.where(r1 < r2, -(r2 / r1) + 1, (r1 / r2) - 1)
+        cpu_data[cpu][model] = {
+          "speedup": spd,
+          "std_cp1": row.get(f"std_time_{cp1}", 0.0),
+          "std_cp2": row.get(f"std_time_{cp2}", 0.0),
+        }
+
+    # filter nodes with enough coverage
+    valid_cpu_counts = [
+      cpu for cpu, models_dict in cpu_data.items()
+      if len(models_dict) / len(models) >= min_coverage_ratio
+    ]
+    if not valid_cpu_counts:
+      plt.close()
+      continue
+
+    valid_cpu_counts = sorted(valid_cpu_counts)
+    x_base = np.arange(len(valid_cpu_counts))
+    offsets = np.linspace(-0.4 + bar_width / 2,
+                0.4 - bar_width / 2,
+                len(models))
+
+    # --- Plot per model ---
+    for i, model in enumerate(models):
+      speedups, x_pos, stds_cp1, stds_cp2 = [], [], [], []
+      for idx, cpu in enumerate(valid_cpu_counts):
+        if model in cpu_data[cpu]:
+          entry = cpu_data[cpu][model]
+          speedups.append(entry["speedup"])
+          stds_cp1.append(entry["std_cp1"])
+          stds_cp2.append(entry["std_cp2"])
+          x_pos.append(x_base[idx] + offsets[i])
+
+      if not speedups:
+        continue
+
+      bars = ax.bar(
+        x_pos, speedups,
+        width=bar_width,
+        color=model_colors[model],
+        label=model
+      )
+      ax.axhline(0, color='r', linewidth=1)
+
       
-  if model is None:
-    raise Error(f'Could not find the model in output of job: {job}\n{stdout}')
-  
-  lines = stdout.splitlines()
-  times = {}
+      for bar, spd, s1, s2 in zip(bars, speedups, stds_cp1, stds_cp2):
+        x_center = bar.get_x() + bar.get_width() / 2
+        height = bar.get_height()
+        dx = bar_width * 0.25
 
-  if model in ['DLRM', 'ResNet-152']:
-    lines = [lines[-1]]
-    
-  for line in lines:
-    parts = line.split(', ') if ', ' in line else [line]
-    _, time = parts[-1].split(' = ')
-    time = float(time.split(' ')[0])
+        if PLOTS_COMPARISON_SHOW_STD:
+          # std indicator for cp1
+          ax.plot([x_center - dx, x_center - dx],
+              [height, height + s1],
+              color="black", linewidth=1)
+          ax.hlines(height + s1,
+              x_center - dx - 0.05, x_center - dx + 0.05,
+              color="black")
 
-    if model not in times: times[model] = []
-    times[model].append(time)
+          # std indicator for cp2
+          ax.plot([x_center + dx, x_center + dx],
+              [height, height + s2],
+              color="red", linewidth=1)
+          ax.hlines(height + s2,
+              x_center + dx - 0.05, x_center + dx + 0.05,
+              color="red")
 
-  return times
+        ymax = height + max(s1, s2)
+        ax.text(x_center, ymax + 0.04,
+            f"{abs(spd)+1:.2f}x",
+            ha="center", va="bottom", fontsize=10)
 
-def filter_jobs(jobs: List[sbm.Job]) -> List[sbm.Job]:
-  filtered_jobs = []
-  for job in jobs:
-    if job.status in ['COMPLETED']:
-      filtered_jobs.append(job)
-  return filtered_jobs
+        if PLOTS_COMPARISON_SHOW_STD:
+          miny = min(miny, height - max(s1, s2))
+        else:
+          miny = min(miny, height)
+        maxy = max(maxy, ymax)
 
+    # --- Axis/labels formatting ---
+    ax.axhline(0, color="black", linewidth=1)
+    ax.set_xticks(x_base)
+    ax.set_xticklabels([str(cpu) for cpu in valid_cpu_counts])
+    yticks = np.arange(-np.ceil(np.abs(miny)), np.ceil(maxy), 1)
+    ax.set_yticks(yticks)
+    yticklabels = []
+    yticklabels_start = yticks[0]-1
+    for i in range(len(yticks)):
+      tick = yticklabels_start+i
+      if tick >= -1:
+        tick += 2
+      yticklabels.append(f'${int(abs(tick))}\\times$')
+    ax.set_yticklabels(yticklabels)
+    ax.set_xlabel("Nodes")
+    ax.set_ylabel("Speedup")
+    if SET_FIG_TITLE:
+      ax.set_title(f"{cp1} vs {cp2}")
+    miny = yticks[0]-1.0
+    maxy = yticks[-1]+1.0
+    ax.set_ylim(miny, maxy)
+    ax.text(-0.55, maxy-0.1,  f'{cp2} Faster',
+        fontsize=18, ha='left', va='top')
+    ax.text(-0.55, miny+0.05, f'{cp1} Faster',
+        fontsize=18, ha='left', va='bottom')
+    # Place legend above the plot
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.18), ncol=len(models))
+    ax.grid(True, axis="y", linestyle="--", alpha=0.6)
+    fig.tight_layout()
+
+    out_path = OUT_DIR / 'comparison' / f'DNNProxy_compare_{cp1}_vs_{cp2}.png'
+    out_path.parent.mkdir(exist_ok=True, parents=True)
+    plt.savefig(out_path)
+    plt.close()
+    print(f"Grouped comparison plot saved to {out_path.resolve()}")
 
 def main():
   data_paths = [Path(p) for p in sys.argv[1:] if Path(p).exists() and Path(p).is_file()]
-  if data_paths:
-    print(f'Reading data from files: {[str(p) for p in data_paths]}')
-    dfs = [pd.read_csv(p) for p in data_paths]
-    df = pd.concat(dfs, ignore_index=True)
-    # Map names
-    df['cluster'] = df['cluster'].map(CLUSTER_NAMES_MAP)
-    df['partition'] = df['partition'].map(PARTITION_NAMES_MAP)
-    df['model'] = df['model'].map(MODEL_NAME_MAP)
-    # Filter
-    if MODELS_BLACKLIST:
-      df = df[~df['model'].isin(MODELS_BLACKLIST)]
-  else:
-    jobs = filter_jobs(sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=False))
-    data = []
-
-    for job in jobs:
-      # print('='*50)
-      # pprint(job)
-      # print(job.get_stdout())
-      # print('-'*50)
-      
-      res = parse_stdout(job)
-      # print(res)
-      for model, times in res.items():
-        m = re.match(r'(\w+)_(\d+)nodes', job.config_name)
-        print(model)
-        print(times)
-        data.append({
-          'cluster': job.cluster_name,
-          'partition': m.group(1),
-          'nodes': int(m.group(2)),
-          'model': model,
-          'geomean_time': geometric_mean(times) if len(times) > 1 else times[0],
-          'std_time': stdev(times) if len(times) > 1 else times[0],
-          'max_time': max(times),
-          'min_time': min(times),
-        })
-
-    df = pd.DataFrame(data)
-    path = OUT_DIR / f'dnnproxies_{sbm.get_cluster_name()}_data.csv'
-    df.to_csv(path)
-    print(f'Data saved to {path.resolve().absolute()}')
+  if not data_paths:
+    print("Please pass a list of CSV files as argument")
+    exit(1)
+    
+  print(f'Reading data from files: {[str(p) for p in data_paths]}')
+  dfs = [pd.read_csv(p) for p in data_paths]
+  df = pd.concat(dfs, ignore_index=True)
+  # Map names
+  df['cluster'] = df['cluster'].map(CLUSTER_NAMES_MAP)
+  df['partition'] = df['partition'].map(PARTITION_NAMES_MAP)
+  df['model'] = df['model'].map(MODEL_NAME_MAP)
+  # Filter
+  if MODELS_BLACKLIST:
+    df = df[~df['model'].isin(MODELS_BLACKLIST)]
 
   print(df)
 
-  clusters = df['cluster'].unique()
   models = df['model'].unique()
   model_color_map = create_color_map(models)
+  
+  plot_barplot_comparisons(df)
 
   for cluster, partition in df.groupby(["cluster", "partition"]).groups.keys():
     plot_scaling_by_model(df, clusters_partitions=(cluster, partition), model_color_map=model_color_map)

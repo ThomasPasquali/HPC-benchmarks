@@ -8,6 +8,7 @@ haicgu_source.sh
 *nanjing/
 *brah/
 *results/
+*results_old/
 *plots/
 
 */test.py
@@ -19,5 +20,5 @@ bin/
 
 HPCG/hpcg-cpu/
 
-HPL/hpl-2.3/
+HPL/hpl/
 HPL/HPL.dat
