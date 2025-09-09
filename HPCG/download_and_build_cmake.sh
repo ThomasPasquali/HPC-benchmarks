@@ -2,7 +2,7 @@
 
 set -e
 
-mkdir hpcg-out
+mkdir -p hpcg-out
 
 BRANCHNAME=master
 HPCG_PATH=${1:-'hpcg-cpu'}
@@ -16,6 +16,8 @@ else
 fi
 
 cd ${HPCG_PATH}
+
+# CMake build
 if [ -d build ]; then
   echo "directory \"build\" already exists - deleting previous HPCG build"
   rm -rf build;

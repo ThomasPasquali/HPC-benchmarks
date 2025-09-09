@@ -208,8 +208,8 @@ def main():
     parsed = parse_hpcg_file(fname)
     metrics = collect_metrics(parsed)
     metrics["file"] = os.path.basename(fname)
-    metrics["partition"] = partition
     metrics["cluster"] = sbm.get_cluster_name()
+    metrics["partition"] = partition
     rows.append(metrics)
 
   df = pd.DataFrame(rows)

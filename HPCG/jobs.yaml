@@ -6,7 +6,7 @@ variables:
   partition: ["eth", "ib"]
 
 preprocess: "mkdir -p hpcg-out; cd hpcg-out; mkdir -p {partition}; cd {partition}; cp ../../hpcg.dat ."
-command: "mpirun -np {nodes} ../../hpcg-cpu/build/xhpcg"
+command: "mpirun -np {nodes} ../../xhpcg"
 
 jobs:
   - config: "{partition}_{nodes}nodes"

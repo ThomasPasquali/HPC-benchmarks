@@ -14,6 +14,7 @@ import sys
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
+import seaborn as sns
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.constants import *
@@ -38,7 +39,8 @@ def load_data(csv_files):
 
 def plot_scaling(df: pd.DataFrame, outdir="results"):
   # Ensure numeric types
-  for col in ["processes", "threads", "gflops", "time_sec"]:
+  for col in ["processes", "threads", "gflops", "time_sec",
+              "gflops_ddot", "gflops_waxpby", "gflops_spmv", "gflops_mg"]:
     if col in df.columns:
       df[col] = pd.to_numeric(df[col], errors="coerce")
 
@@ -103,6 +105,50 @@ def plot_scaling(df: pd.DataFrame, outdir="results"):
   plt.savefig(path, dpi=200)
   print(f"Plot saved to {path.resolve().absolute()}/")
   plt.close()
+  
+  # ---- FLOP Breakdown Comparison ----
+  flop_cols = ["gflops_ddot", "gflops_waxpby", "gflops_spmv", "gflops_mg"]
+  if all(col in df.columns for col in flop_cols):
+    # Aggregate over nodes/cpus (mean per cluster-partition)
+    df_breakdown = (
+      df.groupby(["cluster", "partition"])[flop_cols]
+        .mean()
+        .reset_index()
+    )
+
+    # Create combined label for hue
+    df_breakdown["cluster_partition"] = (
+      df_breakdown["cluster"] + "-" + df_breakdown["partition"]
+    )
+
+    # Melt into long form for seaborn
+    df_melted = df_breakdown.melt(
+      id_vars=["cluster_partition"],
+      value_vars=flop_cols,
+      var_name="kernel",
+      value_name="GFLOPs"
+    )
+
+    plt.figure(figsize=(12, 7))
+    sns.barplot(
+      data=df_melted,
+      x="kernel",
+      y="GFLOPs",
+      hue="cluster_partition",
+      errorbar=None
+    )
+    plt.title("HPCG FLOPs Breakdown")
+    plt.xticks(range(len(flop_cols)), [c.split('_')[1] for c in flop_cols])
+    plt.xlabel("Kernel")
+    plt.ylabel("GFLOPs")
+    plt.legend(title="Cluster-Partition", bbox_to_anchor=(1.05, 1), loc="upper left")
+    plt.tight_layout()
+    path = Path(outdir) / "HPCG_FLOP_Breakdown.png"
+    plt.savefig(path, dpi=200)
+    print(f"Plot saved to {path.resolve().absolute()}/")
+    plt.close()
+  else:
+    print(f'[WARNING] Could not find all breakdown columns, skipping plot', flop_cols)
 
 
 def main():

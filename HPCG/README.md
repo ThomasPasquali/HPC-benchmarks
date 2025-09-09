@@ -2,10 +2,30 @@
 
 ## Build
 
+### CMake
+
 ```bash
 # Make sure to have modules/paths setup correctly
 # Internally uses git and CMake
-./download_and_build.sh
+./download_and_build_cmake.sh
+```
+
+### Makefile
+
+```bash
+# Make sure to have modules/paths setup correctly
+# Internally uses git and Makefile
+# Example: Architecture, Path to Linear Algebra lib, Path to MPI
+./download_and_build_makefile.sh aarch64 \
+    /path/to/OpenBLAS/lib/libopenblas.a openblas /path/to/OpenBLAS/include \
+    /path/to/MPI/lib/libopenmpi.a openmpi /path/to/MPI/include
+```
+
+Examples
+
+```bash
+# HAICGU
+./download_and_build.sh kp920 /software/kp920-RL8/Stages/2024/software/OpenBLAS/0.3.27-GCC-14.1.0/lib64/ openblas /software/kp920-RL8/Stages/2024/software/OpenBLAS/0.3.27-GCC-14.1.0/include/ /software/kp920-RL8/Stages/2024/software/OpenMPI/5.0.3-GCC-14.1.0/lib64 mpi /software/kp920-RL8/Stages/2024/software/OpenMPI/5.0.3-GCC-14.1.0/include/
 ```
 
 ## Run
