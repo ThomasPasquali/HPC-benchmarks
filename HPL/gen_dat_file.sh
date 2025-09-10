@@ -53,13 +53,13 @@ EOF
 
 # Compute a "nice" process grid (P, Q) from tasks
 read P Q <<< $(python3 - <<EOF
-from sympy import divisors, divisor_count
+import math
 tasks = $tasks
-divs = divisors(tasks)
-mid = divisor_count(tasks)//2
+divs = sorted([d for d in range(1, tasks+1) if tasks % d == 0])
+mid = len(divs) // 2
 calc_Q = divs[mid]
 calc_P = tasks // calc_Q
-print(calc_P, calc_Q)
+print(f"{calc_P} {calc_Q}")
 EOF
 )
 

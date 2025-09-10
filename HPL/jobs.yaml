@@ -7,7 +7,7 @@ variables:
   partition: ["eth", "ib"]
 
 preprocess: "./gen_dat_file.sh {nodes} {nodes}"
-command: "mpirun -np {nodes} xhpl"
+command: "mpirun -np {nodes} ./xhpl"
 
 jobs:
   - config: "{partition}_{nodes}nodes"

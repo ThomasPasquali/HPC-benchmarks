@@ -19,7 +19,7 @@ MPinc=$7
 HPCG_PATH=${8:-'hpcg-cpu'}
 TOPdir="$(pwd)/${HPL_PATH}"
 
-if [[ -z "$ARCH" || -z "$LAlib" || -z "$LAinc" || -z "$MPlib" || -z "$MPname" || -z "$MPinc" ]]; then
+if [[ -z "$ARCH" || -z "$LAlib" || -z "$LAinc"  || -z "$LAname" || -z "$MPlib" || -z "$MPname" || -z "$MPinc" ]]; then
   echo "Error: Missing required arguments."
   echo "Usage: $0 <ARCH> <LAlib> <LAname> <LAinc> <MPlib> <MPname> <MPinc> [HPCG_PATH]"
   exit 1
