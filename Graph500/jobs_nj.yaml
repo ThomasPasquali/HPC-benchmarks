@@ -6,7 +6,7 @@ variables:
   which: ['inter']
 
   bin: ["graph500_reference_bfs", "graph500_reference_bfs_smallbuf", "graph500_reference_bfs_largebuf"]
-  scale: [14, 21]
+  scale: [14, 20]
   edgefactor: [8, 32]
   
 

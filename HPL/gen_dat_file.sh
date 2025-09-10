@@ -46,6 +46,7 @@ val = (totalmem * (1024**3) * nodes / 8.0)**0.5
 N = int(round(val / NB) * NB)
 if nodes >= 4:
   N = int(0.65*N)
+N = N / 2.0
 print(N)
 EOF
 )
