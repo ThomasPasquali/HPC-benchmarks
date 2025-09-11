@@ -36,6 +36,14 @@ MODEL_NAME_MAP = {
   'ResNet-50-allreduce': 'ResNet-50-AllRed',
   'ResNet-50-ring': 'ResNet-50-Ring',
 }
+MODEL_IS_COMM_ONLY = {
+  'DLRM':                 False,
+  'ResNet-152':           False,
+  'BERT':                 True,
+  'GPT2':                 True,
+  'ResNet-50-AllRed':     True,
+  'ResNet-50-Ring':       True,
+}
 
 def plot_scaling_by_model(
   df: pd.DataFrame,
@@ -243,148 +251,177 @@ def plot_performance_ratio(
   return ax
 
 PLOTS_COMPARISON_SHOW_STD = False
+PLOTS_SPLIT_COMM_ONLY_AND_EMULATED_COMPUTE = True
 def plot_barplot_comparisons(df: pd.DataFrame, min_coverage_ratio=0.5):
   df['cluster-partition'] = df['cluster'] + '-' + df['partition']
   cluster_partitions = df['cluster-partition'].unique()
-  models = sorted(df["model"].unique())
+  all_models = sorted(df["model"].unique())
 
-  # Assign unique colors to implementations
-  model_colors = create_color_map(models)
+  # Split models into two groups if enabled
+  if PLOTS_SPLIT_COMM_ONLY_AND_EMULATED_COMPUTE:
+    comm_only_models = [m for m in all_models if MODEL_IS_COMM_ONLY.get(m, False)]
+    emu_compute_models = [m for m in all_models if not MODEL_IS_COMM_ONLY.get(m, False)]
+    model_groups = {
+      "comm_only": comm_only_models,
+      "emulated_compute": emu_compute_models
+    }
+  else:
+    model_groups = {"all": all_models}
 
-  for cp1, cp2 in itertools.combinations(cluster_partitions, 2):
-    fig, ax = plt.subplots(figsize=(12, 5))
-    bar_width = 0.8 / len(models)
-    miny, maxy = np.inf, -np.inf
-
-    # --- Build cpu_data: {nodes: {model: speedup, std_cp1, std_cp2}} ---
-    cpu_data = {}
-    for model in models:
-      b1_df = df[(df["model"] == model) & (df["cluster-partition"] == cp1)]
-      b2_df = df[(df["model"] == model) & (df["cluster-partition"] == cp2)]
-      merged = pd.merge(
-        b1_df, b2_df,
-        on="nodes",
-        suffixes=(f"_{cp1}", f"_{cp2}")
-      )
-      for _, row in merged.iterrows():
-        cpu = int(row["nodes"])
-        if cpu not in cpu_data:
-          cpu_data[cpu] = {}
-        r1 = row[f"geomean_time_{cp1}"]
-        r2 = row[f"geomean_time_{cp2}"]
-        spd = np.where(r1 < r2, -(r2 / r1) + 1, (r1 / r2) - 1)
-        cpu_data[cpu][model] = {
-          "speedup": spd,
-          "std_cp1": row.get(f"std_time_{cp1}", 0.0),
-          "std_cp2": row.get(f"std_time_{cp2}", 0.0),
-        }
-
-    # filter nodes with enough coverage
-    valid_cpu_counts = [
-      cpu for cpu, models_dict in cpu_data.items()
-      if len(models_dict) / len(models) >= min_coverage_ratio
-    ]
-    if not valid_cpu_counts:
-      plt.close()
-      continue
-
-    valid_cpu_counts = sorted(valid_cpu_counts)
-    x_base = np.arange(len(valid_cpu_counts))
-    offsets = np.linspace(-0.4 + bar_width / 2,
-                0.4 - bar_width / 2,
-                len(models))
-
-    # --- Plot per model ---
-    for i, model in enumerate(models):
-      speedups, x_pos, stds_cp1, stds_cp2 = [], [], [], []
-      for idx, cpu in enumerate(valid_cpu_counts):
-        if model in cpu_data[cpu]:
-          entry = cpu_data[cpu][model]
-          speedups.append(entry["speedup"])
-          stds_cp1.append(entry["std_cp1"])
-          stds_cp2.append(entry["std_cp2"])
-          x_pos.append(x_base[idx] + offsets[i])
-
-      if not speedups:
+  for group_name, models in model_groups.items():
+    if not models:
         continue
 
-      bars = ax.bar(
-        x_pos, speedups,
-        width=bar_width,
-        color=model_colors[model],
-        label=model
-      )
-      ax.axhline(0, color='r', linewidth=1)
+    # Assign unique colors to implementations (group-specific)
+    model_colors = create_color_map(models)
 
-      
-      for bar, spd, s1, s2 in zip(bars, speedups, stds_cp1, stds_cp2):
-        x_center = bar.get_x() + bar.get_width() / 2
-        height = bar.get_height()
-        dx = bar_width * 0.25
+    for cp1, cp2 in itertools.combinations(cluster_partitions, 2):
+        fig, ax = plt.subplots(figsize=(12, 5))
+        bar_width = 0.8 / len(models)
+        miny, maxy = np.inf, -np.inf
 
-        if PLOTS_COMPARISON_SHOW_STD:
-          # std indicator for cp1
-          ax.plot([x_center - dx, x_center - dx],
-              [height, height + s1],
-              color="black", linewidth=1)
-          ax.hlines(height + s1,
-              x_center - dx - 0.05, x_center - dx + 0.05,
-              color="black")
+        # --- Build cpu_data: {nodes: {model: speedup, std_cp1, std_cp2}} ---
+        cpu_data = {}
+        for model in models:
+            b1_df = df[(df["model"] == model) & (df["cluster-partition"] == cp1)]
+            b2_df = df[(df["model"] == model) & (df["cluster-partition"] == cp2)]
+            merged = pd.merge(
+                b1_df, b2_df,
+                on="nodes",
+                suffixes=(f"_{cp1}", f"_{cp2}")
+            )
+            for _, row in merged.iterrows():
+                cpu = int(row["nodes"])
+                if cpu not in cpu_data:
+                    cpu_data[cpu] = {}
+                r1 = row[f"geomean_time_{cp1}"]
+                r2 = row[f"geomean_time_{cp2}"]
+                spd = np.where(r1 < r2, -(r2 / r1) + 1, (r1 / r2) - 1)
+                cpu_data[cpu][model] = {
+                    "speedup": spd,
+                    "std_cp1": row.get(f"std_time_{cp1}", 0.0),
+                    "std_cp2": row.get(f"std_time_{cp2}", 0.0),
+                }
 
-          # std indicator for cp2
-          ax.plot([x_center + dx, x_center + dx],
-              [height, height + s2],
-              color="red", linewidth=1)
-          ax.hlines(height + s2,
-              x_center + dx - 0.05, x_center + dx + 0.05,
-              color="red")
+        # filter nodes with enough coverage
+        valid_cpu_counts = [
+            cpu for cpu, models_dict in cpu_data.items()
+            if len(models_dict) / len(models) >= min_coverage_ratio
+        ]
+        if not valid_cpu_counts:
+            plt.close()
+            continue
 
-        ymax = height + max(s1, s2)
-        ax.text(x_center, ymax + 0.04,
-            f"{abs(spd)+1:.2f}x",
-            ha="center", va="bottom", fontsize=10)
+        valid_cpu_counts = sorted(valid_cpu_counts)
+        x_base = np.arange(len(valid_cpu_counts))
+        offsets = np.linspace(-0.4 + bar_width / 2,
+                              0.4 - bar_width / 2,
+                              len(models))
 
-        if PLOTS_COMPARISON_SHOW_STD:
-          miny = min(miny, height - max(s1, s2))
-        else:
-          miny = min(miny, height)
-        maxy = max(maxy, ymax)
+        # --- Plot per model ---
+        for i, model in enumerate(models):
+            speedups, x_pos, stds_cp1, stds_cp2 = [], [], [], []
+            for idx, cpu in enumerate(valid_cpu_counts):
+                if model in cpu_data[cpu]:
+                    entry = cpu_data[cpu][model]
+                    speedups.append(entry["speedup"])
+                    stds_cp1.append(entry["std_cp1"])
+                    stds_cp2.append(entry["std_cp2"])
+                    x_pos.append(x_base[idx] + offsets[i])
 
-    # --- Axis/labels formatting ---
-    ax.axhline(0, color="black", linewidth=1)
-    ax.set_xticks(x_base)
-    ax.set_xticklabels([str(cpu) for cpu in valid_cpu_counts])
-    yticks = np.arange(-np.ceil(np.abs(miny)), np.ceil(maxy), 1)
-    ax.set_yticks(yticks)
-    yticklabels = []
-    yticklabels_start = yticks[0]-1
-    for i in range(len(yticks)):
-      tick = yticklabels_start+i
-      if tick >= -1:
-        tick += 2
-      yticklabels.append(f'${int(abs(tick))}\\times$')
-    ax.set_yticklabels(yticklabels)
-    ax.set_xlabel("Nodes")
-    ax.set_ylabel("Speedup")
-    if SET_FIG_TITLE:
-      ax.set_title(f"{cp1} vs {cp2}")
-    miny = yticks[0]-1.0
-    maxy = yticks[-1]+1.0
-    ax.set_ylim(miny, maxy)
-    ax.text(-0.55, maxy-0.1,  f'{cp2} Faster',
-        fontsize=18, ha='left', va='top')
-    ax.text(-0.55, miny+0.05, f'{cp1} Faster',
-        fontsize=18, ha='left', va='bottom')
-    # Place legend above the plot
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.18), ncol=len(models))
-    ax.grid(True, axis="y", linestyle="--", alpha=0.6)
-    fig.tight_layout()
+            if not speedups:
+                continue
 
-    out_path = OUT_DIR / 'comparison' / f'DNNProxy_compare_{cp1}_vs_{cp2}.png'
-    out_path.parent.mkdir(exist_ok=True, parents=True)
-    plt.savefig(out_path)
-    plt.close()
-    print(f"Grouped comparison plot saved to {out_path.resolve()}")
+            bars = ax.bar(
+                x_pos, speedups,
+                width=bar_width,
+                color=model_colors[model],
+                label=model
+            )
+            ax.axhline(0, color='r', linewidth=1)
+
+            for bar, spd, s1, s2 in zip(bars, speedups, stds_cp1, stds_cp2):
+                x_center = bar.get_x() + bar.get_width() / 2
+                height = bar.get_height()
+                dx = bar_width * 0.25
+
+                if PLOTS_COMPARISON_SHOW_STD:
+                    # std indicator for cp1
+                    ax.plot([x_center - dx, x_center - dx],
+                            [height, height + s1],
+                            color="black", linewidth=1)
+                    ax.hlines(height + s1,
+                              x_center - dx - 0.05, x_center - dx + 0.05,
+                              color="black")
+
+                    # std indicator for cp2
+                    ax.plot([x_center + dx, x_center + dx],
+                            [height, height + s2],
+                            color="red", linewidth=1)
+                    ax.hlines(height + s2,
+                              x_center + dx - 0.05, x_center + dx + 0.05,
+                              color="red")
+
+                if PLOTS_COMPARISON_SHOW_STD:
+                  ymax = height + max(s1, s2)
+                  miny = min(miny, height - max(s1, s2))
+                else:
+                  ymax = height
+                  miny = min(miny, height)
+                  
+                maxy = max(maxy, ymax)
+                  
+                text_offset = min(0.05, 0.05 * abs(ymax) + 0.02)  # relative offset (scales with bar height, with a small constant)
+
+                if ymax >= 0:
+                  y_text = ymax + text_offset
+                  va = "bottom"
+                else:
+                  y_text = ymax - text_offset
+                  va = "top"
+
+                ax.text(
+                  x_center, y_text,
+                  f"{abs(spd)+1:.2f}x",
+                  ha="center", va=va, fontsize=10
+                )
+
+        # --- Axis/labels formatting ---
+        ax.axhline(0, color="black", linewidth=1)
+        ax.set_xticks(x_base)
+        ax.set_xticklabels([str(cpu) for cpu in valid_cpu_counts])
+        yticks = np.arange(-np.ceil(np.abs(miny)), np.ceil(maxy), 1)
+        ax.set_yticks(yticks)
+        yticklabels = []
+        yticklabels_start = yticks[0]-1
+        for i in range(len(yticks)):
+            tick = yticklabels_start+i
+            if tick >= -1:
+                tick += 2
+            yticklabels.append(f'${int(abs(tick))}\\times$')
+        ax.set_yticklabels(yticklabels)
+        ax.set_xlabel("Nodes")
+        ax.set_ylabel("Speedup")
+        if SET_FIG_TITLE:
+            ax.set_title(f"{cp1} vs {cp2} [{group_name}]")
+        miny = yticks[0]-1.0
+        maxy = yticks[-1]+1.0
+        ax.set_ylim(miny, maxy)
+        ax.text(-0.55, maxy-0.1,  f'{cp2} Faster',
+                fontsize=18, ha='left', va='top')
+        ax.text(-0.55, miny+0.05, f'{cp1} Faster',
+                fontsize=18, ha='left', va='bottom')
+        # Place legend above the plot
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.18), ncol=len(models))
+        ax.grid(True, axis="y", linestyle="--", alpha=0.6)
+        fig.tight_layout()
+
+        out_path = OUT_DIR / 'comparison' / f'DNNProxy_compare_{cp1}_vs_{cp2}_{group_name}.png'
+        out_path.parent.mkdir(exist_ok=True, parents=True)
+        plt.savefig(out_path)
+        plt.close()
+        print(f"Grouped comparison plot saved to {out_path.resolve()}")
+
 
 def main():
   data_paths = [Path(p) for p in sys.argv[1:] if Path(p).exists() and Path(p).is_file()]

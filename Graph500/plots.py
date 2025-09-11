@@ -1,14 +1,8 @@
-from pprint import pprint
-import re
-from collections import defaultdict
 import sys
 import matplotlib.pyplot as plt
 from pathlib import Path
-from typing import Dict, Tuple
-import numpy as np
 import pandas as pd
 import seaborn as sns
-import sbatchman as sbm
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.constants import *
@@ -29,47 +23,10 @@ plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 OUT_DIR = Path('results')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-def parse_metrics_file(filepath: Path, rank_filter=None, run_filter=None) -> Tuple[float, float, Dict, Dict]:
-  barrier_times = defaultdict(dict)
-  comm_stats = defaultdict(lambda: defaultdict(dict))
-  teps = 0.0
-  cut_teps = 0.0
-  with open(filepath, "r") as f:
-    for line in f:
-      if 'harmonic_mean_TEPS' in line:
-        line = re.subn(r'\s{2,}', ' ', line)[0]
-        teps = float(line.split(' ')[-1])
-        continue
-      if 'harmonic_mean_cut_TEPS' in line:
-        line = re.subn(r'\s{2,}', ' ', line)[0]
-        cut_teps = float(line.split(' ')[-1])
-        continue
-      if not line.startswith("[METRIC]"):
-        continue
+FIG_SIZE_SCALING = (10, 5)
 
-      tokens = line.strip().split()
-      try:
-        rank = int(tokens[1].split("=")[1])
-        run = int(tokens[2].split("=")[1])
-
-        if rank_filter is not None and rank != rank_filter:
-          continue
-        if run_filter is not None and run != run_filter:
-          continue
-
-        if "barrier_wait_time" in line:
-          time = float(tokens[3].split("=")[1])
-          barrier_times[rank][run] = time
-        else:
-          dest = int(tokens[3].split("=")[1])
-          n_comms = int(tokens[4].split("=")[1])
-          volume = int(tokens[5].split("=")[1])
-          comm_stats[rank][run][dest] = (n_comms, volume)
-      except (IndexError, ValueError):
-        raise
-        continue
-
-  return cut_teps, teps, barrier_times, comm_stats
+AVERAGE_PACKET_SIZE_MEAN_AND_STD = False
+REMOVE_OUTLIERS = False
 
 # def make_plots(data):
 #   # Group by (scale, ef)
@@ -222,10 +179,14 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
   cluster_color_map = create_color_map(df_aggr.sort_values('cluster')['cluster'].unique())
   partition_linestyle_map = create_linestyle_map(df_aggr.sort_values('partition')['partition'].unique())
   implementation_marker_map = create_marker_map(df_aggr.sort_values('impl')['impl'].unique())
+  
+  cluster_linestyle_map = create_linestyle_map(df_aggr.sort_values('cluster')['cluster'].unique())
+  partition_marker_map = create_marker_map(df_aggr.sort_values('partition')['partition'].unique())
+  implementation_color_map = create_color_map(df_aggr.sort_values('impl')['impl'].unique())
 
   # TEPS and CUT_TEPS vs Nodes
   for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
-    plt.figure(figsize=(12, 12))
+    plt.figure(figsize=FIG_SIZE_SCALING)
 
     x_ticks_nodes = set()
     for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
@@ -234,17 +195,21 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
       teps_vals = impl_group_sorted['teps']
       teps_or_cut_teps_vals = impl_group_sorted['cut_teps']
 
-      color = cluster_color_map[cluster]
-      linestyle = partition_linestyle_map[partition]
-      marker = implementation_marker_map[impl]
+      # color = cluster_color_map[cluster]
+      # linestyle = partition_linestyle_map[partition]
+      # marker = implementation_marker_map[impl]
+      color = implementation_color_map[impl]
+      linestyle = cluster_linestyle_map[cluster]
+      marker = partition_marker_map[partition]
+      
       label_base = f"{cluster}-{partition}-{impl}"
-      plt.plot(nodes, teps_vals, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}-TEPS")
-      plt.plot(nodes, teps_or_cut_teps_vals, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}-CUT TEPS")
+      plt.plot(nodes, teps_vals/1e6, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}-GTEPS")
+      plt.plot(nodes, teps_or_cut_teps_vals/1e6, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}-CUT GTEPS")
       x_ticks_nodes |= set(nodes.values)
 
     plt.title(f"Graph500 Scaling - Scale={scale}, Edgefactor={ef}")
     plt.xlabel("Nodes")
-    plt.ylabel("TEPS and CUT TEPS")
+    plt.ylabel("GTEPS and CUT GTEPS")
     plt.xticks(sorted(list(x_ticks_nodes)))
     plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
     plt.legend(title="Cluster-Partition/Config-Implementation")
@@ -258,7 +223,7 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
   # ONLY TEPS or CUT_TEPS Scaling
   for metric in ['teps', 'cut_teps']:
     for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
-      plt.figure(figsize=(12, 12))
+      plt.figure(figsize=FIG_SIZE_SCALING)
 
       x_ticks_nodes = set()
       for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
@@ -266,16 +231,21 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
         nodes = impl_group_sorted['nodes']
         teps_or_cut_teps_vals = impl_group_sorted[metric]
 
-        color = cluster_color_map[cluster]
-        linestyle = partition_linestyle_map[partition]
-        marker = implementation_marker_map[impl]
+        # color = cluster_color_map[cluster]
+        # linestyle = partition_linestyle_map[partition]
+        # marker = implementation_marker_map[impl]
+        
+        color = implementation_color_map[impl]
+        linestyle = cluster_linestyle_map[cluster]
+        marker = partition_marker_map[partition]
+        
         label_base = f"{cluster}-{partition}-{impl}"
-        plt.plot(nodes, teps_or_cut_teps_vals, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}")
+        plt.plot(nodes, teps_or_cut_teps_vals/1e6, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}")
         x_ticks_nodes |= set(nodes.values)
 
       plt.title(f"Graph500 Scaling - Scale={scale}, Edgefactor={ef}")
       plt.xlabel("Nodes")
-      plt.ylabel(metric.capitalize())
+      plt.ylabel('G'+metric.upper().replace('_', ' '))
       plt.xticks(sorted(list(x_ticks_nodes)))
       plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
       plt.legend(title="Cluster-Partition/Config-Implementation")
@@ -376,9 +346,6 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
   #   print(f'Plot saved to {path}')
   #   plt.close()
 
-  # Flag to toggle outlier removal
-  REMOVE_OUTLIERS = False
-
   # Filter input DataFrame
   df_filtered = df[df["nodes"] > 2].copy()
   df_filtered["cluster_partition"] = df_filtered["cluster"] + "-" + df_filtered["partition"]
@@ -398,7 +365,7 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
     edgefactor = row["edgefactor"]
     nodes = row["nodes"]
 
-    subset = df_filtered[
+    subset: pd.DataFrame = df_filtered[
       (df_filtered["scale"] == scale)
       & (df_filtered["edgefactor"] == edgefactor)
       & (df_filtered["nodes"] == nodes)
@@ -429,18 +396,62 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
 
     # Right: barplot of mean_packet_size (mean ± std)
     grouped = subset.groupby(["impl", "cluster_partition"])["mean_packet_size"].agg(['mean', 'std']).reset_index()
+    
+    
+    # delete
+    # if scale == 14 and edgefactor == 8 and nodes == 4:
+    #   with pd.option_context('display.max_rows', None):
+    #     for a, b in subset.groupby(["impl", "cluster_partition"]):
+    #       if a[0] == 'largebuf':
+    #         # print(b)
+    #         print(b[['cluster', 'partition', 'run', "mean_packet_size"]])
+    #         print(b["mean_packet_size"].describe())
+    #         print('-'*100)
+    #     print('|'*100)
+    #     print(grouped)
+      
+    if AVERAGE_PACKET_SIZE_MEAN_AND_STD:
+      # Keep a copy of the original for comparison
+      grouped_orig = grouped.copy()
+
+      grouped = (
+          grouped.groupby(["impl"])[["mean", "std"]]
+          .agg({"mean": "mean", "std": "mean"})   # average both mean and std
+          .reset_index()
+      )
+
+      # --- Sanity check: relative variation must not exceed 5% ---
+      merged = pd.merge(grouped, grouped_orig, on="impl", suffixes=("_avg", "_orig"))
+      for _, row in merged.iterrows():
+        for col in ["mean", "std"]:
+          orig_val = row[f"{col}_orig"]
+          avg_val = row[f"{col}_avg"]
+          if orig_val != 0 and orig_val >= 1.0:  # avoid div by zero
+            # rel_diff = abs(avg_val - orig_val) / abs(orig_val)
+            rel_diff = abs(avg_val - orig_val) / (abs(avg_val) + abs(orig_val))
+            if rel_diff > 0.05:
+              print(
+                f"⚠️ Warning (scale={int(scale)}, edgefactor={int(edgefactor)}, nodes={int(nodes)})"
+                f": {col} for impl={row['impl']} "
+                f"changed by {rel_diff:.1%} ({orig_val=}, {avg_val=}) (>5%)"
+              )
+  
     sns.barplot(
       data=grouped,
       x="impl",
       y="mean",
-      hue="cluster_partition",
+      hue="cluster_partition" if not AVERAGE_PACKET_SIZE_MEAN_AND_STD else None,
       ax=axes[1],
       capsize=0.1,
       err_kws={'linewidth': 1.5},
     )
     # Add manual error bars aligned with bar centers
     # We retrieve bar locations from the bar containers
-    for bars, (_, group) in zip(axes[1].containers, grouped.groupby("cluster_partition")):
+    if AVERAGE_PACKET_SIZE_MEAN_AND_STD:
+      groups = zip(axes[1].containers, [('s', grouped)])
+    else:
+      groups = zip(axes[1].containers, grouped.groupby("cluster_partition"))
+    for bars, (_, group) in groups:
       for bar, (_, row) in zip(bars, group.iterrows()):
         height = bar.get_height()
         axes[1].errorbar(
@@ -456,10 +467,16 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
     axes[1].set_title("Avg. Packet Size (mean ± std)")
     axes[1].set_ylabel("Avg. Packet Size [Bytes]")
     axes[1].set_xlabel("Implementation")
-    axes[1].legend()
+    if not AVERAGE_PACKET_SIZE_MEAN_AND_STD:
+      axes[1].legend()
 
     plt.tight_layout()
-    path = OUT_DIR / 'barrier_and_avgsize' / f'Graph500_barrier_avgpacketsize{"_noutliers" if REMOVE_OUTLIERS else ""}_s{scale}_ef{edgefactor}_n{nodes}.png'
+    dir = 'barrier_and_avgsize'
+    if AVERAGE_PACKET_SIZE_MEAN_AND_STD:
+      dir += '_avg_size'
+    if REMOVE_OUTLIERS:
+      dir += '_no_outliers'
+    path = OUT_DIR / dir / f'Graph500_barrier_avgpacketsize{"_noutliers" if REMOVE_OUTLIERS else ""}_s{scale}_ef{edgefactor}_n{nodes}.png'
     path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(path)
     print(f'Plot saved to {path}')
@@ -468,144 +485,38 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
 
 
 if __name__ == "__main__":
-  if len(sys.argv) > 1 and (len(sys.argv) - 1) % 2 != 0:
+  if len(sys.argv) < 3 or (len(sys.argv) - 1) % 2 != 0:
     print(f'Usage: python3 {sys.argv[0]} path/to/summary_aggr1 path/to/summary1 [path/to/summary_aggr2 path/to/summary2 ...]')
     exit(1)
-  elif len(sys.argv) > 2:
-    df_aggr_list = []
-    df_list = []
-
-    for i in range(1, len(sys.argv), 2):
-      data_aggr_path = Path(sys.argv[i])
-      data_path = Path(sys.argv[i + 1])
-
-      if not (data_aggr_path.exists() and data_aggr_path.is_file() and data_path.exists() and data_path.is_file()):
-        print(f'CSV files do not exist: {data_aggr_path}, {data_path}')
-        exit(2)
-
-      print(f'Reading aggregated data from file: "{data_aggr_path}"')
-      df_aggr = pd.read_csv(data_aggr_path)
-      df_aggr_list.append(df_aggr)
-      print(f'Reading data from file: "{data_path}"')
-      df = pd.read_csv(data_path)
-      df_list.append(df)
-
-    df_aggr = pd.concat(df_aggr_list, ignore_index=True)
-    df = pd.concat(df_list, ignore_index=True)
     
-    # Map names
-    df['cluster'] = df['cluster'].map(CLUSTER_NAMES_MAP)
-    df['partition'] = df['partition'].map(PARTITION_NAMES_MAP)
-    df_aggr['cluster'] = df_aggr['cluster'].map(CLUSTER_NAMES_MAP)
-    df_aggr['partition'] = df_aggr['partition'].map(PARTITION_NAMES_MAP)
-  else:
-    data = defaultdict(list)
-    jobs = sbm.jobs_list(from_active=True, from_archived=False, status=[sbm.Status.COMPLETED])
-    for job in jobs:
-      m = re.match(r'(\w+)_(\d+)nodes', job.config_name)
-      if not m:
-        continue
+  df_aggr_list = []
+  df_list = []
 
-      command_parts = job.command.split(' ')
-      edgefactor = command_parts[-1]
-      scale = command_parts[-2]
-      program = None
-      for p in command_parts:
-        if 'graph500_reference_bfs' in p:
-          program = p
-          break
-      if p is None:
-        raise Exception(f'Could not find executable in command "{job.command}"')
-      partition, nodes_str = m.groups()
-      nodes = int(nodes_str)
+  for i in range(1, len(sys.argv), 2):
+    data_aggr_path = Path(sys.argv[i])
+    data_path = Path(sys.argv[i + 1])
 
-      cut_teps, teps, barrier_times, comm_stats = parse_metrics_file(job.get_stdout_path())
+    if not (data_aggr_path.exists() and data_aggr_path.is_file() and data_path.exists() and data_path.is_file()):
+      print(f'CSV files do not exist: {data_aggr_path}, {data_path}')
+      exit(2)
 
-      if not barrier_times:
-        continue
+    print(f'Reading aggregated data from file: "{data_aggr_path}"')
+    df_aggr = pd.read_csv(data_aggr_path)
+    df_aggr_list.append(df_aggr)
+    print(f'Reading data from file: "{data_path}"')
+    df = pd.read_csv(data_path)
+    df_list.append(df)
 
-      num_ranks = len(barrier_times)
-      num_runs = len(next(iter(barrier_times.values())))  # use first rank to get run count
-
-      # Create barrier time matrix (ranks x runs)
-      barrier_matrix = np.zeros((num_runs, num_ranks))
-      for r in barrier_times:
-        for run in barrier_times[r]:
-          barrier_matrix[run, r] = barrier_times[r][run]
-
-      volume_matrix = np.zeros((num_runs, num_ranks, num_ranks))
-      count_matrix = np.zeros((num_runs, num_ranks, num_ranks))
-      for src, run_dict in comm_stats.items():
-        for run, dst_dict in run_dict.items():
-          for dst, (n_comms, volume) in dst_dict.items():
-            volume_matrix[run][src][dst] += volume
-            count_matrix[run][src][dst] += n_comms
-
-
-      impl = 'classic'
-      if 'smallbuf' in program:
-        impl = 'smallbuf'
-      elif 'largebuf' in program:
-        impl = 'largebuf'
-        
-      cluster = job.cluster_name
-      key = (cluster, partition, impl, scale, edgefactor)
-
-      data[key].append((
-        (nodes, teps, cut_teps),    # TEPS
-        nodes,                      # for filename suffixes
-        barrier_matrix,             # Barrier Times
-        volume_matrix,              # Volume matrix
-        count_matrix                # Count matrix
-      ))
-
-    # Prepare DataFrame
-    df_records_aggr = []
-    df_records = []
-    for (cluster, partition, impl, scale, edgefactor), entries in data.items():
-      for entry in entries:
-        (nodes, teps, cut_teps), _, barrier_matrix, volume_matrix, count_matrix = entry
-
-        df_records_aggr.append({
-          "cluster": cluster,
-          "partition": partition,
-          "impl": impl,
-          "scale": int(scale),
-          "edgefactor": int(edgefactor),
-          "nodes": nodes,
-          "teps": teps,
-          "cut_teps": cut_teps,
-          "mean_barrier_time": np.mean(barrier_matrix),
-          "std_barrier_time": np.std(barrier_matrix),
-          "total_comm_volume": np.sum(volume_matrix),
-          "total_comm_count": np.sum(count_matrix),
-          "mean_packet_size": np.mean(np.divide(volume_matrix, count_matrix, where=count_matrix != 0))
-        })
-
-        for run_i in range(len(barrier_matrix)):
-          df_records.append({
-            "cluster": cluster,
-            "partition": partition,
-            "impl": impl,
-            "scale": int(scale),
-            "edgefactor": int(edgefactor),
-            "nodes": nodes,
-            "run": run_i,
-            "mean_barrier_time": np.mean(barrier_matrix[run_i]),
-            "std_barrier_time": np.std(barrier_matrix[run_i]),
-            "total_comm_volume": np.sum(volume_matrix[run_i]),
-            "total_comm_count": np.sum(count_matrix[run_i]),
-            "mean_packet_size": np.mean(np.divide(volume_matrix[run_i], count_matrix[run_i], where=count_matrix[run_i] != 0))
-          })
-
-    df_aggr = pd.DataFrame(df_records_aggr)
-    path = OUT_DIR / f"graph500_{sbm.get_cluster_name()}_summary_aggr.csv"
-    df_aggr.to_csv(path, index=False)
-    print(f"Wrote CSV summary with {len(df_aggr)} rows to {path.resolve().absolute()}")
-
-    df = pd.DataFrame(df_records)
-    path = OUT_DIR / f"graph500_{sbm.get_cluster_name()}_summary.csv"
-    df.to_csv(path, index=False)
-    print(f"Wrote CSV summary with {len(df)} rows to {path.resolve().absolute()}")
-
+  df_aggr = pd.concat(df_aggr_list, ignore_index=True)
+  df = pd.concat(df_list, ignore_index=True)
+  
+  # Map names
+  df['cluster'] = df['cluster'].map(CLUSTER_NAMES_MAP)
+  df['partition'] = df['partition'].map(PARTITION_NAMES_MAP)
+  df_aggr['cluster'] = df_aggr['cluster'].map(CLUSTER_NAMES_MAP)
+  df_aggr['partition'] = df_aggr['partition'].map(PARTITION_NAMES_MAP)
+  
+  # with pd.option_context('display.max_rows', None):
+  #   print(df[(df['nodes']==4) & (df['scale']==21) & (df['edgefactor']==32)])
+  
   make_plots(df_aggr, df)

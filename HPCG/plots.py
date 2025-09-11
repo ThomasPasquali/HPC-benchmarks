@@ -143,6 +143,7 @@ def plot_scaling(df: pd.DataFrame, outdir="results"):
     plt.ylabel("GFLOPs")
     plt.legend(title="Cluster-Partition", bbox_to_anchor=(1.05, 1), loc="upper left")
     plt.tight_layout()
+    plt.grid(True)
     path = Path(outdir) / "HPCG_FLOP_Breakdown.png"
     plt.savefig(path, dpi=200)
     print(f"Plot saved to {path.resolve().absolute()}/")

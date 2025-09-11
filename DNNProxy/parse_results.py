@@ -25,8 +25,6 @@ def parse_stdout(job: sbm.Job) -> Dict[str, List[float]]:
   elif 'ResNet-50' in stdout:
     model = 'ResNet-50'
       
-  print(model)
-      
   if model is None:
     raise Exception(f'Could not find the model in output of job: {job}\n{stdout}')
   
@@ -82,7 +80,7 @@ def main():
 
   df = pd.DataFrame(data)
   path = OUT_DIR / f'dnnproxies_{sbm.get_cluster_name()}_data.csv'
-  df.to_csv(path)
+  df.to_csv(path, index=False)
   print(f'Data saved to {path.resolve().absolute()}')
 
 if __name__ == "__main__":
