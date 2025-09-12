@@ -10,6 +10,7 @@ haicgu_source.sh
 *brah/
 *results/
 *results_old/
+*results_*/
 *plots/
 
 */test.py

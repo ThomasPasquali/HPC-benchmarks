@@ -23,10 +23,17 @@ plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 OUT_DIR = Path('results')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
+IMPLEMENTATION_NAMES_MAP = {
+  'smallbuf': 'Sbuf',
+  'largebuf': 'Lbuf',
+  'classic': 'classic',
+}
+
 FIG_SIZE_SCALING = (10, 5)
 
-AVERAGE_PACKET_SIZE_MEAN_AND_STD = False
-REMOVE_OUTLIERS = False
+EXCLUDED_IMPLEMENTATIONS = [] # ['classic']
+AVERAGE_PACKET_SIZE_MEAN_AND_STD = True
+REMOVE_OUTLIERS = True
 
 # def make_plots(data):
 #   # Group by (scale, ef)
@@ -183,6 +190,24 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
   cluster_linestyle_map = create_linestyle_map(df_aggr.sort_values('cluster')['cluster'].unique())
   partition_marker_map = create_marker_map(df_aggr.sort_values('partition')['partition'].unique())
   implementation_color_map = create_color_map(df_aggr.sort_values('impl')['impl'].unique())
+  
+  # --- compute global y-limits first ---
+  all_vals = []
+  for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
+    for (cluster, partition, impl), impl_group in group.groupby(['cluster', 'partition', 'impl']):
+      impl_group_sorted = impl_group.sort_values('nodes')
+      all_vals.extend(impl_group_sorted['teps'].values)
+      all_vals.extend(impl_group_sorted['cut_teps'].values)
+
+  # scale to GTEPS
+  all_vals = [v / 1e6 for v in all_vals]
+  ymin, ymax = min(all_vals), max(all_vals)
+  print(f'{ymin=}    {ymax=}')
+
+  # optional: pad for aesthetics
+  y_pad = 0.05 * (ymax - ymin if ymax > ymin else 1.0)
+  ymin -= y_pad
+  ymax += y_pad
 
   # TEPS and CUT_TEPS vs Nodes
   for (scale, ef), group in df_aggr.groupby(['scale', 'edgefactor']):
@@ -203,10 +228,11 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
       marker = partition_marker_map[partition]
       
       label_base = f"{cluster}-{partition}-{impl}"
-      plt.plot(nodes, teps_vals/1e6, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}-GTEPS")
-      plt.plot(nodes, teps_or_cut_teps_vals/1e6, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}-CUT GTEPS")
+      plt.plot(nodes, teps_vals/1e6, color=color, marker=marker, markersize=8, linestyle=linestyle, label=f"{label_base}-GTEPS")
+      plt.plot(nodes, teps_or_cut_teps_vals/1e6, color=color, marker=marker, markersize=8, linestyle=linestyle, label=f"{label_base}-CUT GTEPS")
       x_ticks_nodes |= set(nodes.values)
 
+    plt.ylim(ymin, ymax) 
     plt.title(f"Graph500 Scaling - Scale={scale}, Edgefactor={ef}")
     plt.xlabel("Nodes")
     plt.ylabel("GTEPS and CUT GTEPS")
@@ -240,9 +266,10 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
         marker = partition_marker_map[partition]
         
         label_base = f"{cluster}-{partition}-{impl}"
-        plt.plot(nodes, teps_or_cut_teps_vals/1e6, color=color, marker=marker, linestyle=linestyle, label=f"{label_base}")
+        plt.plot(nodes, teps_or_cut_teps_vals/1e6, color=color, marker=marker, markersize=8, linestyle=linestyle, label=f"{label_base}")
         x_ticks_nodes |= set(nodes.values)
 
+      plt.ylim(ymin, ymax) 
       plt.title(f"Graph500 Scaling - Scale={scale}, Edgefactor={ef}")
       plt.xlabel("Nodes")
       plt.ylabel('G'+metric.upper().replace('_', ' '))
@@ -369,7 +396,7 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
       (df_filtered["scale"] == scale)
       & (df_filtered["edgefactor"] == edgefactor)
       & (df_filtered["nodes"] == nodes)
-    ]
+    ].sort_values(['impl', 'cluster', 'partition'])
 
     # Optionally remove outliers
     subset_full = subset
@@ -415,9 +442,9 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
       grouped_orig = grouped.copy()
 
       grouped = (
-          grouped.groupby(["impl"])[["mean", "std"]]
-          .agg({"mean": "mean", "std": "mean"})   # average both mean and std
-          .reset_index()
+        grouped.groupby(["impl"])[["mean", "std"]]
+        .agg({"mean": "mean", "std": "mean"})   # average both mean and std
+        .reset_index()
       )
 
       # --- Sanity check: relative variation must not exceed 5% ---
@@ -513,8 +540,15 @@ if __name__ == "__main__":
   # Map names
   df['cluster'] = df['cluster'].map(CLUSTER_NAMES_MAP)
   df['partition'] = df['partition'].map(PARTITION_NAMES_MAP)
+  df['impl'] = df['impl'].map(IMPLEMENTATION_NAMES_MAP)
   df_aggr['cluster'] = df_aggr['cluster'].map(CLUSTER_NAMES_MAP)
   df_aggr['partition'] = df_aggr['partition'].map(PARTITION_NAMES_MAP)
+  df_aggr['impl'] = df_aggr['impl'].map(IMPLEMENTATION_NAMES_MAP)
+  
+  # FILTER
+  if EXCLUDED_IMPLEMENTATIONS:
+    df = df[~df['impl'].isin(EXCLUDED_IMPLEMENTATIONS)]
+    df_aggr = df_aggr[~df_aggr['impl'].isin(EXCLUDED_IMPLEMENTATIONS)]
   
   # with pd.option_context('display.max_rows', None):
   #   print(df[(df['nodes']==4) & (df['scale']==21) & (df['edgefactor']==32)])
