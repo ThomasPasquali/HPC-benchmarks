@@ -47,6 +47,7 @@ PARTITION_NAMES_MAP = {
   'eth': 'eth',
   'NSLB': 'nslb',
   'plain': 'default',
+  'booster': 'booster',
 }
 
 # Plots style

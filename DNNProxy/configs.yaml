@@ -14,9 +14,6 @@ haicgu:
     modules: 
       - "GCC/14.1.0"
       - "OpenMPI/5.0.3"
-    env:
-      - "OMP_PROC_BIND=true"
-      - "OMP_NUM_THREADS=128"
     exclude:
       - cn17
       - cn19
@@ -37,3 +34,22 @@ nanjing:
 
   configs:
     - name: "nanjing_{nodes}nodes"
+
+leonardo:
+  scheduler: slurm
+
+  default_conf:
+    cpus_per_task: 1
+    time: "00:30:00"
+    account: "try25_HNS"
+    qos: "normal"
+    gpus: 0
+    modules: 
+      - "gcc/12.2.0"
+      - "openmpi/4.1.6--gcc--12.2.0-cuda-12.2"
+
+  configs:
+    - name: "booster_{nodes}nodes"
+      partition: "boost_usr_prod"
+      nodes: "{nodes}"
+      ntasks: "{nodes}"

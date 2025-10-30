@@ -5,7 +5,7 @@ variables:
 
   models_hardcoded: ['resnet50', 'resnet152', 'dlrm']
 
-  # partition: ["leonardo"]
+  # partition: ["booster"] # Leonardo
   partition: ["eth", "ib"]
 
 jobs:

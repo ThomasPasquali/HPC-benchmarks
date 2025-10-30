@@ -32,10 +32,10 @@ leonardo:
   scheduler: slurm
 
   default_conf:
-    account: "IscrC_OMG-25"
+    account: "try25_HNS"
     cpus_per_task: 32
     gpus: 0
-    time: "00:05:00"
+    time: "00:10:00"
     partition: "boost_usr_prod"
     qos: "normal"
     modules: 

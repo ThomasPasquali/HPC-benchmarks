@@ -2,7 +2,7 @@ sequential: true
 
 variables:
   nodes: [1, 2, 4, 8]
-  # partition: ["leonardo"]
+  # partition: ["booster"] # Leonardo
   partition: ["eth", "ib"]
 
   bin: ["graph500_reference_bfs", "graph500_reference_bfs_smallbuf", "graph500_reference_bfs_largebuf"]
