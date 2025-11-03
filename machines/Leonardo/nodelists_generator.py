@@ -6,16 +6,20 @@ Generates optimized nodelists for SLURM job scheduling based on network topology
 import pandas as pd
 import re
 import numpy as np
-from typing import List, Dict, Set, Tuple, Optional
+from typing import List, Dict, Set, Tuple, Optional, Union
 from dataclasses import dataclass
 from enum import Enum
 import itertools
 
+PARTITION_NAME_MAP = {
+    "1": "boost_usr_prod",
+    "2": "dcgp_usr_prod",
+}
 
 class TopologyConstraint(Enum):
     """Network topology constraints for node selection"""
-    SAME_CELL = "same_cell"              # All nodes in same cell
     SAME_RACK = "same_rack"              # All nodes in same rack
+    SAME_CELL = "same_cell"              # All nodes in same cell
     SAME_SWITCH = "same_switch"          # All nodes on same L1 switch
     DIFFERENT_CELLS = "different_cells"  # Nodes spread across different cells
     DIFFERENT_RACKS = "different_racks"  # Nodes spread across different racks
@@ -37,22 +41,56 @@ class SlurmResources:
             raise ValueError("num_nodes must be positive")
 
 
+def load_leonardo_system_data(csv_path: str) -> pd.DataFrame:
+        """
+        Load Leonardo system data from CSV or create sample data.
+        
+        Args:
+            csv_path: Path to CSV file with system topology
+            
+        Returns:
+            DataFrame with system topology
+        """
+        print(f"Loading system data from {csv_path}...")
+        pattern = re.compile(
+            r"NODE\s+(\d+)\s+RACK\s+(\d+)\s+CELL\s+(\d+)\s+ROW\s+(\d+)\s+PARTITION\s+(\d+)\s+SWITCH\s+(\d+)"
+        )
+        
+        records = []
+        with open(csv_path) as f:
+            for line in f:
+                match = pattern.search(line)
+                if match:
+                    records.append(match.groups())
+        
+        return pd.DataFrame(
+            records,
+            columns=["NODE", "RACK", "CELL", "ROW", "PARTITION", "SWITCH"]
+        ).astype(int)
+
+
 class LeonardoNodelistGenerator:
     """
     Generates optimized nodelists for Leonardo supercomputer based on
     network topology and SLURM resource requirements.
     """
     
-    def __init__(self, system_df: pd.DataFrame):
+    def __init__(self, system_df: Union[None,pd.DataFrame] = None, csv_path: Union[None,str] = None):
         """
         Initialize with system topology dataframe.
         
         Args:
             system_df: DataFrame with columns [NODE, RACK, CELL, ROW, PARTITION, SWITCH]
         """
-        self.df = system_df.copy()
+        if system_df is not None:
+            self.df = system_df.copy()
+        elif csv_path:
+            self.df = load_leonardo_system_data(csv_path)
+        else:
+            raise Exception('Must provide either system_df or csv_path')
         self._validate_dataframe()
         self._precompute_topology()
+            
         
     def _validate_dataframe(self):
         """Validate the input dataframe has required columns"""
@@ -294,13 +332,14 @@ class LeonardoNodelistGenerator:
     
     def format_nodelist_for_slurm(self, nodelist: List[int]) -> str:
         """
-        Format nodelist for SLURM using compact range notation.
+        Format nodelist for SLURM using compact range notation with 'lrdn' prefix
+        and 4-digit zero-padded node IDs.
         
         Args:
             nodelist: List of node IDs
             
         Returns:
-            SLURM-compatible nodelist string (e.g., "node[001-010,015,020-025]")
+            SLURM-compatible nodelist string (e.g., "lrdn[0001-0010,0015,0020-0025]")
         """
         if not nodelist:
             return ""
@@ -327,7 +366,7 @@ class LeonardoNodelistGenerator:
         else:
             ranges.append(f"{start:04d}-{end:04d}")
         
-        return f"node[{','.join(ranges)}]"
+        return f"lrdn[{','.join(ranges)}]"
     
     def analyze_nodelist_topology(self, nodelist: List[int]) -> Dict:
         """
@@ -424,7 +463,7 @@ class LeonardoNodelistGenerator:
         # Build squeue command
         cmd = ["squeue", "--noheader", "-o", format_str]
         if partition:
-            cmd.extend(["-p", partition])
+            cmd.extend(["-p", PARTITION_NAME_MAP[str(partition)]])
         
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
