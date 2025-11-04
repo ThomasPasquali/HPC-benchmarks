@@ -2,8 +2,8 @@ sequential: true
 
 variables:
   nodes: [1, 2, 4, 8]
-  # partition: ["booster"] # Leonardo
-  partition: ["eth", "ib"]
+  partition: ["boost_usr_prod"] # Leonardo Booster
+  # partition: ["eth", "ib"] # HAICGU
 
   bin: ["graph500_reference_bfs", "graph500_reference_bfs_smallbuf", "graph500_reference_bfs_largebuf"]
   scale: [14, 20]

@@ -14,6 +14,8 @@ import itertools
 PARTITION_NAME_MAP = {
     "1": "boost_usr_prod",
     "2": "dcgp_usr_prod",
+    "boost_usr_prod": "boost_usr_prod",
+    "dcgp_usr_prod": "dcgp_usr_prod",
 }
 
 class TopologyConstraint(Enum):
@@ -75,12 +77,25 @@ class LeonardoNodelistGenerator:
     network topology and SLURM resource requirements.
     """
     
-    def __init__(self, system_df: Union[None,pd.DataFrame] = None, csv_path: Union[None,str] = None):
+    def __init__(
+        self, 
+        system_df: Union[None, pd.DataFrame] = None, 
+        csv_path: Union[None, str] = None,
+        verify_with_sinfo: bool = False,
+        sinfo_states: Optional[List[str]] = None,
+        sinfo_partitions: Optional[List[str]] = None
+    ):
         """
         Initialize with system topology dataframe.
         
         Args:
             system_df: DataFrame with columns [NODE, RACK, CELL, ROW, PARTITION, SWITCH]
+            csv_path: Path to topology file (used if system_df is None)
+            verify_with_sinfo: If True, verify node availability using sinfo
+            sinfo_states: List of acceptable node states (default: ['idle', 'mixed', 'allocated'])
+                         Common states: idle, mixed, allocated, down, drain, draining, drained
+            sinfo_partitions: Optional whitelist of partition names to check (e.g., ['boost_usr_prod', 'dcgp_usr_prod'])
+                             If None, all partitions are checked
         """
         if system_df is not None:
             self.df = system_df.copy()
@@ -88,10 +103,129 @@ class LeonardoNodelistGenerator:
             self.df = load_leonardo_system_data(csv_path)
         else:
             raise Exception('Must provide either system_df or csv_path')
-        self._validate_dataframe()
-        self._precompute_topology()
-            
         
+        self._validate_dataframe()
+        
+        # Verify nodes with sinfo if requested
+        self.unavailable_nodes = set()
+        if verify_with_sinfo:
+            if sinfo_states is None:
+                sinfo_states = ['idle', 'mixed', 'allocated']
+            self._verify_nodes_with_sinfo(sinfo_states, sinfo_partitions)
+        
+        self._precompute_topology()
+    
+    def _verify_nodes_with_sinfo(self, acceptable_states: List[str], partition_whitelist: Optional[List[str]] = None):
+        """
+        Verify node availability using sinfo and mark unavailable nodes.
+        
+        Args:
+            acceptable_states: List of node states considered available
+            partition_whitelist: Optional list of partition names to filter (e.g., ['boost_usr_prod'])
+                                If None, all partitions are considered
+        """
+        import subprocess
+        
+        partition_msg = f" (partitions: {partition_whitelist})" if partition_whitelist else " (all partitions)"
+        print(f"Verifying node availability with sinfo{partition_msg} (acceptable states: {acceptable_states})...")
+        
+        try:
+            # Query sinfo for node states
+            # Format: %N=nodelist, %T=state, %P=partition
+            cmd = ["sinfo", "-N", "--noheader", "-o", "%N|%T|%P"]
+            
+            # Add partition filter if specified
+            if partition_whitelist:
+                cmd.extend(["-p", ",".join(partition_whitelist)])
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            output = result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: sinfo command failed: {e}")
+            print("Proceeding without node verification.")
+            return
+        except FileNotFoundError:
+            print("Warning: sinfo command not found.")
+            print("Proceeding without node verification.")
+            return
+        
+        # Parse sinfo output
+        available_nodes = set()
+        unavailable_nodes = set()
+        nodes_by_partition = {}
+        
+        for line in output.split('\n'):
+            if not line.strip():
+                continue
+            
+            parts = line.split('|')
+            if len(parts) < 3:
+                continue
+            
+            nodename = parts[0].strip()
+            state = parts[1].strip().lower()
+            partition = parts[2].strip()
+            
+            # Extract node number from nodename (e.g., "lrdn0001" -> 1)
+            node_match = re.search(r'(\d+)', nodename)
+            if not node_match:
+                continue
+            
+            node_id = int(node_match.group(1))
+            
+            # Track partitions for informational purposes
+            if partition not in nodes_by_partition:
+                nodes_by_partition[partition] = {'available': set(), 'unavailable': set()}
+            
+            # Check if node is in acceptable state
+            # Handle compound states like "idle*", "drain*", "mixed+drain"
+            base_state = state.split('*')[0].split('+')[0].split('~')[0]
+            
+            if base_state in [s.lower() for s in acceptable_states]:
+                available_nodes.add(node_id)
+                nodes_by_partition[partition]['available'].add(node_id)
+            else:
+                unavailable_nodes.add(node_id)
+                nodes_by_partition[partition]['unavailable'].add(node_id)
+        
+        # Filter out nodes from dataframe that are not available
+        all_nodes = set(self.df['NODE'].values)
+        
+        # If partition whitelist is specified, also mark nodes not in those partitions as unavailable
+        if partition_whitelist:
+            nodes_in_whitelisted_partitions = set()
+            for part in partition_whitelist:
+                if part in nodes_by_partition:
+                    nodes_in_whitelisted_partitions.update(nodes_by_partition[part]['available'])
+                    nodes_in_whitelisted_partitions.update(nodes_by_partition[part]['unavailable'])
+            
+            # Nodes not in sinfo output (not in whitelisted partitions) are unavailable
+            nodes_not_in_whitelist = all_nodes - nodes_in_whitelisted_partitions
+            unavailable_nodes.update(nodes_not_in_whitelist)
+            
+            self.unavailable_nodes = (all_nodes - available_nodes) | nodes_not_in_whitelist
+        else:
+            self.unavailable_nodes = all_nodes - available_nodes
+        
+        if self.unavailable_nodes:
+            print(f"Found {len(self.unavailable_nodes)} unavailable nodes (not in states: {acceptable_states})")
+            print(f"Unavailable nodes will be excluded from nodelist generation.")
+            
+            # Print partition breakdown
+            if partition_whitelist and len(nodes_by_partition) > 0:
+                print(f"\nPartition breakdown:")
+                for part, counts in nodes_by_partition.items():
+                    print(f"  {part}: {len(counts['available'])} available, {len(counts['unavailable'])} unavailable")
+            
+            # Optionally print some examples
+            if len(self.unavailable_nodes) <= 20:
+                print(f"Unavailable nodes: {sorted(list(self.unavailable_nodes))}")
+            else:
+                sample = sorted(list(self.unavailable_nodes))[:10]
+                print(f"Sample unavailable nodes: {sample} ... (and {len(self.unavailable_nodes) - 10} more)")
+        else:
+            print(f"All {len(all_nodes)} nodes from topology file are available.")
+    
     def _validate_dataframe(self):
         """Validate the input dataframe has required columns"""
         required_cols = ["NODE", "RACK", "CELL", "ROW", "PARTITION", "SWITCH"]
@@ -101,24 +235,30 @@ class LeonardoNodelistGenerator:
     
     def _precompute_topology(self):
         """Precompute topology mappings for efficient lookup"""
-        # Group nodes by various topology levels
-        self.nodes_by_cell = self.df.groupby('CELL')['NODE'].apply(list).to_dict()
-        self.nodes_by_rack = self.df.groupby('RACK')['NODE'].apply(list).to_dict()
-        self.nodes_by_switch = self.df.groupby('SWITCH')['NODE'].apply(list).to_dict()
-        self.nodes_by_partition = self.df.groupby('PARTITION')['NODE'].apply(list).to_dict()
+        # Filter out unavailable nodes
+        if self.unavailable_nodes:
+            df_available = self.df[~self.df['NODE'].isin(self.unavailable_nodes)]
+        else:
+            df_available = self.df
         
-        # Create reverse mappings
+        # Group nodes by various topology levels
+        self.nodes_by_cell = df_available.groupby('CELL')['NODE'].apply(list).to_dict()
+        self.nodes_by_rack = df_available.groupby('RACK')['NODE'].apply(list).to_dict()
+        self.nodes_by_switch = df_available.groupby('SWITCH')['NODE'].apply(list).to_dict()
+        self.nodes_by_partition = df_available.groupby('PARTITION')['NODE'].apply(list).to_dict()
+        
+        # Create reverse mappings (use full df for lookups)
         self.node_to_cell = self.df.set_index('NODE')['CELL'].to_dict()
         self.node_to_rack = self.df.set_index('NODE')['RACK'].to_dict()
         self.node_to_switch = self.df.set_index('NODE')['SWITCH'].to_dict()
         self.node_to_partition = self.df.set_index('NODE')['PARTITION'].to_dict()
         
         # Map cells to racks and switches
-        self.cell_to_racks = self.df.groupby('CELL')['RACK'].apply(lambda x: list(x.unique())).to_dict()
-        self.cell_to_switches = self.df.groupby('CELL')['SWITCH'].apply(lambda x: list(x.unique())).to_dict()
+        self.cell_to_racks = df_available.groupby('CELL')['RACK'].apply(lambda x: list(x.unique())).to_dict()
+        self.cell_to_switches = df_available.groupby('CELL')['SWITCH'].apply(lambda x: list(x.unique())).to_dict()
         
         # Determine nodes per switch (for Booster vs DCGP)
-        self.switch_capacities = self.df.groupby('SWITCH')['NODE'].count().to_dict()
+        self.switch_capacities = df_available.groupby('SWITCH')['NODE'].count().to_dict()
     
     def generate_nodelists(
         self,
@@ -169,7 +309,7 @@ class LeonardoNodelistGenerator:
     def _filter_by_partition(self, partition: Optional[int]) -> Set[int]:
         """Filter available nodes by partition"""
         if partition is None:
-            return set(self.df['NODE'].values)
+            return set(self.df['NODE'].values) - self.unavailable_nodes
         return set(self.nodes_by_partition.get(partition, []))
     
     def _generate_same_cell(self, available_nodes: Set[int], num_nodes: int) -> List[List[int]]:
@@ -782,20 +922,16 @@ def example_usage():
     """Example usage of the Leonardo nodelist generator"""
     
     # Load your system dataframe
-    # df = pd.read_csv('leonardo_system.csv')
-    # For demonstration, create a small sample
-    # df = pd.DataFrame({
-    #     'NODE': list(range(1, 181)),
-    #     'RACK': [i//30 + 1 for i in range(180)],
-    #     'CELL': [1] * 180,
-    #     'ROW': [1] * 180,
-    #     'PARTITION': [1] * 180,
-    #     'SWITCH': [10100 + (i//10)*2 for i in range(180)]
-    # })
     df = parse_topology_file("leo_map.txt")
     
-    # Initialize generator
-    generator = LeonardoNodelistGenerator(df)
+    # Initialize generator with sinfo verification
+    print("=== Initializing Generator with sinfo Verification ===")
+    generator = LeonardoNodelistGenerator(
+        df, 
+        verify_with_sinfo=True,
+        sinfo_states=['idle', 'mixed', 'allocated'],  # Only accept these states
+        sinfo_partitions=['boost_usr_prod']  # Only check nodes in boost_usr_prod partition
+    )
     
     # Define resource requirements
     resources = SlurmResources(
@@ -807,7 +943,7 @@ def example_usage():
     )
     
     # Generate nodelists with different constraints
-    print("=== Generating Candidate Nodelists ===")
+    print("\n=== Generating Candidate Nodelists ===")
     nodelists = generator.generate_nodelists(
         resources,
         constraint=TopologyConstraint.SAME_CELL,
@@ -815,7 +951,6 @@ def example_usage():
     )
     
     print(f"Generated {len(nodelists)} candidate nodelists")
-    print(nodelists)
     
     # Rank by availability based on current queue
     print("\n=== Ranking Nodelists by Availability ===")
@@ -840,4 +975,3 @@ def example_usage():
 
 if __name__ == "__main__":
     example_usage()
-
