@@ -1,19 +1,47 @@
 # Distributed Deep Neural Network Proxies (Training)
 
-## Build
+## Load Modules
 
+### On Leonardo
 ```bash
-# Make sure to have modules/paths setup correctly
+# to compile and run the experiments
+module load gcc/12.2.0
+module load openmpi/4.1.6--gcc--12.2.0-cuda-12.2
+# to plot the data and run the "run_on_leonardo.py" script  
+# Note: The default python on Leonardo is 3.6.8 (old)
+module load python/3.11.7 
+```
+
+## Build 
+```bash
+# After Loading the necessary modules
 make
+```
+
+## Install Sbatchman
+
+You need Sbatchman to run the experiments. Follow the [development installation guide](https://sbatchman.readthedocs.io/en/latest/development/). 
+
+IMPORTANT: you need to install SbatchMan as a developer! Do NOT follow the standard installation.
+
+## Setup Sbatchman
+```bash
+# Assuming you’ve set up the SbatchMan aliases:
+sbmi                                   # sbmi -> sbatchman init
+sbmc -f configs.yaml -ow               # sbmc -> sbatchman configure
 ```
 
 ## Run
 
 ```bash
-# Assuming you set up SbatchMan aliases 
-sbmi
-sbmc -f configs.yaml -ow
-sbml -f jobs.yaml
+# Assuming you’ve set up the SbatchMan aliases:
+sbl -f jobs.yaml                       # sbl -> sbatchman launch
+```
+
+## Run on Leonardo
+The Python script **run_on_leonardo** ensures that the nodes for the experiments are on different L1 switches but under the same L2 switch (same cell, different switch). Nodes are divided into two equally sized groups each under a different L1 switch.
+```bash
+python run_on_leonardo.py --csv ../machines/Leonardo/leo_map.txt --jobs jobs.yaml
 ```
 
 ## Generate Data + (local) Plots

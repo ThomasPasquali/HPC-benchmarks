@@ -44,12 +44,12 @@ leonardo:
     account: "try25_HNS"
     qos: "normal"
     gpus: 0
-    modules: 
+    modules:
       - "gcc/12.2.0"
       - "openmpi/4.1.6--gcc--12.2.0-cuda-12.2"
 
   configs:
-    - name: "booster_{nodes}nodes"
+    - name: "boost__usr_prod_{nodes}nodes"
       partition: "boost_usr_prod"
       nodes: "{nodes}"
       ntasks: "{nodes}"
