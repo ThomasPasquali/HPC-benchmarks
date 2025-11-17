@@ -7,3 +7,6 @@
 [submodule "STREAM/STREAM"]
 	path = STREAM/STREAM
 	url = https://github.com/jeffhammond/STREAM.git
+[submodule "BLAS/OpenBLAS"]
+	path = BLAS/OpenBLAS
+	url = https://github.com/OpenMathLib/OpenBLAS.git
