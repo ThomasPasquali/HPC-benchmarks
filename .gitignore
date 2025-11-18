@@ -21,7 +21,7 @@ SbatchMan/
 
 bin/
 
-HPCG/hpcg-cpu/
+HPCG/hpcg-cpu/bin
 
 HPL/hpl/
 HPL/HPL.dat
