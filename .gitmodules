@@ -10,3 +10,6 @@
 [submodule "BLAS/OpenBLAS"]
 	path = BLAS/OpenBLAS
 	url = https://github.com/OpenMathLib/OpenBLAS.git
+[submodule "ccutils"]
+	path = ccutils
+	url = git@github.com:ThomasPasquali/ccutils.git
