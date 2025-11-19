@@ -18,16 +18,22 @@
 #include <cmath>
 #include <utility>
 
-#include "utils.hpp"
+#include <ccutils/mpi/mpi_macros.h>
+#include <ccutils/mpi/mpi_timers.h>
+#include <ccutils/timers.h>
 
 #define WARM_UP 8
 #define RUNS 8
 
 // allreduce sizes for gradients with message aggregation
 #define NUM_B 10
-int allreduce_sizes[NUM_B] = {6511592, 6567936, 5905920, 6113280, 6176256, 6112768, 6176256, 6112768, 5321216, 5194816};
+int allreduce_sizes[NUM_B] = {
+    6019281, 6019281, 6019281, 6019281, 
+    6019281, 6019281, 6019281, 6019281,
+    6019280, 6019280
+};
 
-std::vector<double> allreduce_times = std::vector<double>(WARM_UP + RUNS);
+std::vector<float> allreduce_times = std::vector<float>(WARM_UP + RUNS);
 
 // batchsize = 128
 // Suggest world_size <= 256, which is corresponding to a global batch_size <= 32 K
@@ -58,9 +64,9 @@ int run_data_parallel(float** grad_ptrs, float** sum_grad_ptrs, int new_num_b, i
     }
 
 
-    double start_time = MPI_Wtime();
+    float start_time = MPI_Wtime();
     MPI_Waitall(new_num_b, grad_allreduce_reqs, MPI_STATUSES_IGNORE); 
-    double end_time = MPI_Wtime();
+    float end_time = MPI_Wtime();
 
     allreduce_times[run_id] = end_time - start_time;
 
@@ -73,51 +79,25 @@ std::pair<int, int*> change_num_bucket(uint new_num_b){
 
     float new_bwd_rt_per_B = bwd_rt_per_B * (NUM_B / (float)new_num_b);
 
-    // Calculate total size
-    // Calculate total size
     long long total_size = 0;
-    for (int i = 0; i < NUM_B; i++) {
+    for (uint32_t i = 0; i < NUM_B; i++) {
         total_size += allreduce_sizes[i];
     }
-    
-    // Allocate new array for bucket sizes
-    int* new_allreduce_sizes = (int*)calloc(new_num_b, sizeof(int));
-    
-    // Step 1: Sample the distribution pattern (without preserving total yet)
-    double* proportions = (double*)malloc(new_num_b * sizeof(double));
-    double sum_proportions = 0.0;
-    
-    for (uint i = 0; i < new_num_b; i++) {
-        // Map new bucket index to original bucket space
-        float original_pos = i * (NUM_B - 1) / (float)(new_num_b - 1);
-        int base_idx = (int)original_pos;
-        float fraction = original_pos - base_idx;
-        
-        if (base_idx >= NUM_B - 1) {
-            proportions[i] = allreduce_sizes[NUM_B - 1];
-        } else {
-            // Interpolate between two adjacent buckets
-            proportions[i] = allreduce_sizes[base_idx] * (1.0 - fraction) +
-                                allreduce_sizes[base_idx + 1] * fraction;
-        }
-        sum_proportions += proportions[i];
-    }
-    
-    // Step 2: Scale proportions to match total_size
-    long long assigned_total = 0;
-    for (uint i = 0; i < new_num_b - 1; i++) {
-        new_allreduce_sizes[i] = (int)std::round((proportions[i] / sum_proportions) * total_size);
-        assigned_total += new_allreduce_sizes[i];
-    }
-    
-    // Step 3: Assign remainder to last bucket to ensure exact total
-    new_allreduce_sizes[new_num_b - 1] = total_size - assigned_total;
-    
-    free(proportions);
-    
-    return std::make_pair(new_bwd_rt_per_B, new_allreduce_sizes);
-}
 
+    // Alloca nuovo array per i bucket
+    int* new_allreduce_sizes = (int*)calloc(new_num_b, sizeof(int));
+    if (!new_allreduce_sizes) return {new_bwd_rt_per_B, nullptr};
+
+    // Divisione uniforme
+    int base = total_size / new_num_b;
+    int remainder = total_size % new_num_b;
+
+    for (uint32_t i = 0; i < new_num_b; i++) {
+        new_allreduce_sizes[i] = base + (i < remainder ? 1 : 0);
+    }
+
+    return {new_bwd_rt_per_B, new_allreduce_sizes};
+}
 
 int main(int argc, char *argv[]){
     int rank, world_size;
@@ -156,48 +136,39 @@ int main(int argc, char *argv[]){
         run_data_parallel(grad_ptrs, sum_grad_ptrs, new_num_b, gradient_sizes, run_id++);
     }
 
-    std::vector<double> run_times = std::vector<double>(RUNS);
+    std::vector<float> run_times = std::vector<float>(RUNS);
 
-    double begin;
-    begin = MPI_Wtime();
+    float begin;
     for(int iter = 0; iter < RUNS; iter++){
         begin = MPI_Wtime();
         run_data_parallel(grad_ptrs, sum_grad_ptrs, new_num_b, gradient_sizes, run_id++);
         run_times[iter] = (MPI_Wtime()-begin);
     }
 
-    std::pair<double, double> avg_std = compute_avg_stddev(run_times, 0, RUNS);
-    double runtime_avg = avg_std.first;
-    double runtime_stddev = avg_std.second;
+    ccutils_timers::TimerStats stats;
 
-    // int total_params = 0;
-    // for(int i=0; i<new_num_b; i++){
-	//     total_params += gradient_sizes[i];	
-    // }
+    stats = ccutils_timers::compute_stats(run_times);
+    float runtime_avg = stats.avg;
+    float runtime_stddev = stats.stddev;
 
-    //avg and std of allreduce times
-    avg_std = compute_avg_stddev(allreduce_times, WARM_UP, RUNS);
-    double barrier_avg = avg_std.first;
-    double barrier_stddev = avg_std.second;
+    stats = ccutils_timers::compute_stats(allreduce_times, WARM_UP);
+    float barrier_avg = stats.avg;
+    float barrier_stddev = stats.stddev;
 
-    std::vector<double> msg_sizes(gradient_sizes, gradient_sizes + new_num_b);
-    avg_std = compute_avg_stddev(msg_sizes, 0, new_num_b);
-    double msg_size_avg = avg_std.first;
-    double msg_size_stddev = avg_std.second;
+    std::vector<float> msg_sizes(gradient_sizes, gradient_sizes + new_num_b);
+    stats = ccutils_timers::compute_stats(msg_sizes, 0);
+    float msg_size_avg = stats.avg;
+    float msg_size_stddev = stats.stddev;
 
-    
-    if(rank == 0){
-        //TODO: remove this thing and make a useful log with (packet size, bucket size, runtime, compute time, comm time, etc.)
-        printf("Avg_runtime(s):%f\n", runtime_avg);
-        printf("Stddev_runtime(s):%f\n", runtime_stddev);
-        printf("Fwd_compute(us):%d\n", fwd_rt_whole_model);
-        printf("Bwd_compute_per_B(us):%d\n", bwd_rt_per_B);
-        printf("Num_buckets:%d\n", new_num_b);
-        printf("Avg_barrier_time(s):%f\n", barrier_avg);
-        printf("Stddev_barrier_time(s):%f\n", barrier_stddev);
-        printf("Avg_msg_size(bytes):%f\n", msg_size_avg * sizeof(float));
-        printf("Stddev_msg_size(bytes):%f\n", msg_size_stddev * sizeof(float));
-    }
+    MPI_PRINT_ONCE("Avg_runtime(s):%f\n", runtime_avg);
+    MPI_PRINT_ONCE("Stddev_runtime(s):%f\n", runtime_stddev);
+    MPI_PRINT_ONCE("Fwd_compute(us):%d\n", fwd_rt_whole_model);
+    MPI_PRINT_ONCE("Bwd_compute_per_B(us):%d\n", bwd_rt_per_B);
+    MPI_PRINT_ONCE("Num_buckets:%d\n", new_num_b);
+    MPI_PRINT_ONCE("Avg_barrier_time(s):%f\n", barrier_avg);
+    MPI_PRINT_ONCE("Stddev_barrier_time(s):%f\n", barrier_stddev);
+    MPI_PRINT_ONCE("Avg_msg_size(bytes):%f\n", msg_size_avg * sizeof(float));
+    MPI_PRINT_ONCE("Stddev_msg_size(bytes):%f\n", msg_size_stddev * sizeof(float));
 
     MPI_Finalize();
 }
