@@ -22,6 +22,11 @@
 #include <ccutils/mpi/mpi_timers.h>
 #include <ccutils/timers.h>
 
+//TODO: use the ccutils MPI macros and timers
+
+MPI_TIMER_DEF(runtime)
+MPI_TIMER_DEF(barrier)
+
 #define WARM_UP 8
 #define RUNS 8
 
@@ -32,8 +37,6 @@ int allreduce_sizes[NUM_B] = {
     6019281, 6019281, 6019281, 6019281,
     6019280, 6019280
 };
-
-std::vector<float> allreduce_times = std::vector<float>(WARM_UP + RUNS);
 
 // batchsize = 128
 // Suggest world_size <= 256, which is corresponding to a global batch_size <= 32 K
@@ -64,11 +67,9 @@ int run_data_parallel(float** grad_ptrs, float** sum_grad_ptrs, int new_num_b, i
     }
 
 
-    float start_time = MPI_Wtime();
+    MPI_TIMER_START(barrier)
     MPI_Waitall(new_num_b, grad_allreduce_reqs, MPI_STATUSES_IGNORE); 
-    float end_time = MPI_Wtime();
-
-    allreduce_times[run_id] = end_time - start_time;
+    MPI_TIMER_STOP(barrier)
 
     return 0;
 }
@@ -138,27 +139,34 @@ int main(int argc, char *argv[]){
 
     std::vector<float> run_times = std::vector<float>(RUNS);
 
-    float begin;
     for(int iter = 0; iter < RUNS; iter++){
-        begin = MPI_Wtime();
+        MPI_TIMER_START(runtime)
         run_data_parallel(grad_ptrs, sum_grad_ptrs, new_num_b, gradient_sizes, run_id++);
-        run_times[iter] = (MPI_Wtime()-begin);
+        MPI_TIMER_STOP(runtime)
     }
 
-    ccutils_timers::TimerStats stats;
+    ccutils_timers::TimerStats runtime_stats;
+    ccutils_timers::TimerStats barrier_stats;
 
-    stats = ccutils_timers::compute_stats(run_times);
-    float runtime_avg = stats.avg;
-    float runtime_stddev = stats.stddev;
+    runtime_stats = ccutils_timers::compute_stats(__timer_vals_runtime);
+    barrier_stats = ccutils_timers::compute_stats(__timer_vals_barrier);
 
-    stats = ccutils_timers::compute_stats(allreduce_times, WARM_UP);
-    float barrier_avg = stats.avg;
-    float barrier_stddev = stats.stddev;
+    float runtime_avg = runtime_stats.avg;
+    float runtime_stddev = runtime_stats.stddev;
+    float barrier_avg = barrier_stats.avg;
+    float barrier_stddev = barrier_stats.stddev;
 
-    std::vector<float> msg_sizes(gradient_sizes, gradient_sizes + new_num_b);
-    stats = ccutils_timers::compute_stats(msg_sizes, 0);
-    float msg_size_avg = stats.avg;
-    float msg_size_stddev = stats.stddev;
+    float msg_size_avg = 0.0f;
+    for(int i=0; i<new_num_b; i++){
+        msg_size_avg += gradient_sizes[i];
+    }
+    msg_size_avg = msg_size_avg / new_num_b;
+
+    float msg_size_std = 0.0f;
+    for(int i=0; i<new_num_b; i++){
+        msg_size_std += (gradient_sizes[i] - msg_size_avg) * (gradient_sizes[i] - msg_size_avg);
+    }
+    msg_size_std = std::sqrt(msg_size_std / new_num_b);
 
     MPI_PRINT_ONCE("Avg_runtime(s):%f\n", runtime_avg);
     MPI_PRINT_ONCE("Stddev_runtime(s):%f\n", runtime_stddev);
@@ -168,7 +176,7 @@ int main(int argc, char *argv[]){
     MPI_PRINT_ONCE("Avg_barrier_time(s):%f\n", barrier_avg);
     MPI_PRINT_ONCE("Stddev_barrier_time(s):%f\n", barrier_stddev);
     MPI_PRINT_ONCE("Avg_msg_size(bytes):%f\n", msg_size_avg * sizeof(float));
-    MPI_PRINT_ONCE("Stddev_msg_size(bytes):%f\n", msg_size_stddev * sizeof(float));
+    MPI_PRINT_ONCE("Stddev_msg_size(bytes):%f\n", msg_size_std*sizeof(float)); //all buckets have similar size
 
     MPI_Finalize();
 }
