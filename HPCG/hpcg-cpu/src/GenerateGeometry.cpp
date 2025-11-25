@@ -89,18 +89,10 @@ void GenerateGeometry(int size, int rank, int numThreads,
 
 #ifdef HPCG_DEBUG
   if (rank==0)
-    HPCG_fout   << "size = "<< size << endl
-        << "nx  = " << nx << endl
-        << "ny  = " << ny << endl
-        << "nz  = " << nz << endl
-        << "npx = " << npx << endl
-        << "npy = " << npy << endl
-        << "npz = " << npz << endl;
-
-  HPCG_fout    << "For rank = " << rank << endl
-      << "ipx = " << ipx << endl
-      << "ipy = " << ipy << endl
-      << "ipz = " << ipz << endl;
+    HPCG_fout   << "processes="<< size << endl
+        << "[Problem size] "    << nx << "x" << ny << "x" << nz
+        << "[Process grid] "    << npx << "x" << npy << "x" << npz
+        << "[Process indices] " << ipx << "," << ipy << "," << ipz
 
   assert(size>=npx*npy*npz);
 #endif

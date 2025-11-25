@@ -16,6 +16,7 @@ from pathlib import Path
 import pandas as pd
 import re
 import sbatchman as sbm
+from metrics import METRICS_TO_EXTRACT
 
 def parse_hpcg_file(filename: str) -> dict:
   """
@@ -93,69 +94,6 @@ def _get_section_value(parsed: dict, section: str, key_candidates):
       if found:
         return sec[found]
   return None
-
-METRICS_TO_EXTRACT = [
-  {
-    "out_key": "gflops_opt",
-    "section": "GFLOP/s Summary",
-    "candidates": ["Total with convergence and optimization phase overhead"],
-  },
-  {
-    "out_key": "gflops",
-    "section": "GFLOP/s Summary",
-    "candidates": ["Total with convergence overhead"],
-  },
-  {
-    "out_key": "gflops_ddot",
-    "section": "GFLOP/s Summary",
-    "candidates": ["Raw DDOT"],
-  },
-  {
-    "out_key": "gflops_waxpby",
-    "section": "GFLOP/s Summary",
-    "candidates": ["Raw WAXPBY"],
-  },
-  {
-    "out_key": "gflops_spmv",
-    "section": "GFLOP/s Summary",
-    "candidates": ["Raw SpMV"],
-  },
-  {
-    "out_key": "gflops_mg",
-    "section": "GFLOP/s Summary",
-    "candidates": ["Raw MG"],
-  },
-  {
-    "out_key": "time_sec",
-    "section": "Benchmark Time Summary",
-    "candidates": ["Total"],
-  },
-  {
-    "out_key": "num_equations",
-    "section": "Linear System Information",
-    "candidates": ["Number of Equations"],
-  },
-  {
-    "out_key": "global_nx",
-    "section": "Global Problem Dimensions",
-    "candidates": ["Global nx", "Global Nx", "Global NX"],
-  },
-  {
-    "out_key": "global_ny",
-    "section": "Global Problem Dimensions",
-    "candidates": ["Global ny", "Global Ny", "Global NY"],
-  },
-  {
-    "out_key": "global_nz",
-    "section": "Global Problem Dimensions",
-    "candidates": ["Global nz", "Global Nz", "Global NZ"],
-  },
-  {
-    "out_key": "mem",
-    "section": "Memory Use Information",
-    "candidates": ["Total memory used for data (Gbytes)"],
-  },
-]
 
 def collect_metrics(parsed: dict) -> dict:
   out = {}

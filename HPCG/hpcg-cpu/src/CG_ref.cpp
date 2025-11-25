@@ -136,9 +136,9 @@ int CG_ref(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
   times[3] += t3; // SPMV time
   times[4] += t4; // AllReduce time
   times[5] += t5; // preconditioner apply time
-#ifndef HPCG_NO_MPI
- times[6] += tHalo; // exchange halo time
-#endif
+  #ifndef HPCG_NO_MPI
+    times[6] += tHalo; // exchange halo time
+  #endif
   times[0] += mytimer() - t_begin;  // Total time. All done...
   return 0;
 }

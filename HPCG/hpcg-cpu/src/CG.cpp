@@ -31,6 +31,9 @@
 #include "ComputeDotProduct.hpp"
 #include "ComputeWAXPBY.hpp"
 
+//FIXME delete
+#include <mpi.h>
+
 
 // Use TICK and TOCK to time a code section in MATLAB-like fashion
 #define TICK()  t0 = mytimer() //!< record current time in 't0'
@@ -92,6 +95,11 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
   if (A.geom->rank==0) HPCG_fout << "Initial Residual = "<< normr << std::endl;
 #endif
 
+  if (A.geom->rank==0) {
+    HPCG_fout << "$$$ End init" << std::endl;
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
+
   // Record initial residual for convergence testing
   normr0 = normr;
 
@@ -104,6 +112,13 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
     else
       CopyVector (r, z); // copy r to z (no preconditioning)
     TOCK(t5); // Preconditioner apply time
+
+
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (A.geom->rank==0) {
+      HPCG_fout << "$$$ End preconditioner" << std::endl;
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
 
     if (k == 1) {
       TICK(); ComputeWAXPBY(nrow, 1.0, z, 0.0, z, p, A.isWaxpbyOptimized); TOCK(t2); // Copy Mr to p
@@ -126,6 +141,11 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
     if (A.geom->rank==0 && (k%print_freq == 0 || k == max_iter))
       HPCG_fout << "Iteration = "<< k << " (max " << max_iter << ")   Scaled Residual = "<< normr/normr0 << std::endl;
 #endif
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (A.geom->rank==0) {
+      HPCG_fout << ">>> End of Iteration "<< k << " (max " << max_iter << ")   Scaled Residual = "<< normr/normr0 << std::endl;
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
     niters = k;
   }
 

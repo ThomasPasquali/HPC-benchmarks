@@ -26,7 +26,7 @@
 #include <omp.h>
 #endif
 
-#if defined(HPCG_DEBUG) || defined(HPCG_DETAILED_DEBUG)
+#if defined(HPCG_DEBUG) || defined(HPCG_DETAILED_DEBUG) || defined(HPCG_METRICS)
 #include <fstream>
 using std::endl;
 #include "hpcg.hpp"
@@ -181,9 +181,8 @@ void GenerateProblem_ref(SparseMatrix & A, Vector * b, Vector * x, Vector * xexa
       } // end ix loop
     } // end iy loop
   } // end iz loop
-#ifdef HPCG_DETAILED_DEBUG
-  HPCG_fout     << "Process " << A.geom->rank << " of " << A.geom->size <<" has " << localNumberOfRows    << " rows."     << endl
-      << "Process " << A.geom->rank << " of " << A.geom->size <<" has " << localNumberOfNonzeros<< " nonzeros." <<endl;
+#ifdef HPCG_METRICS
+  HPCG_fout << "[Rows,NNZ]<Rank " << A.geom->rank << "> " << localNumberOfRows << "," << localNumberOfNonzeros << endl;
 #endif
 
   global_int_t totalNumberOfNonzeros = 0;

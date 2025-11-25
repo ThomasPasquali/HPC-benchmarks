@@ -63,6 +63,12 @@ using std::endl;
 #include <stdio.h>
 #include <string>
 
+#ifdef HPCG_METRICS
+  #define PRINT_SEP(title) if (rank == 0) { HPCG_fout << "==== " << title << " ====\n"; }
+#else
+  #define PRINT_SEP(title)
+#endif
+
 /*!
   Main driver program: Construct synthetic problem, run V&V tests, compute benchmark parameters, run benchmark, report results.
 
@@ -126,6 +132,7 @@ int main(int argc, char * argv[]) {
   ierr = CheckAspectRatio(0.125, geom->npx, geom->npy, geom->npz, "process grid", rank==0);
   if (ierr)
     return ierr;
+  PRINT_SEP("Geometry Constructed")
 
   // Use this array for collecting timing information
   std::vector< double > times(10,0.0);
@@ -134,16 +141,20 @@ int main(int argc, char * argv[]) {
 
   SparseMatrix A;
   InitializeSparseMatrix(A, geom);
+  PRINT_SEP("Matrix Initialized")
 
   Vector b, x, xexact;
   GenerateProblem(A, &b, &x, &xexact);
+  PRINT_SEP("Problem Generated")
   SetupHalo(A);
+  PRINT_SEP("Halo Setup")
   int numberOfMgLevels = 4; // Number of levels including first
   SparseMatrix * curLevelMatrix = &A;
   for (int level = 1; level< numberOfMgLevels; ++level) {
     GenerateCoarseProblem(*curLevelMatrix);
     curLevelMatrix = curLevelMatrix->Ac; // Make the just-constructed coarse grid the next level
   }
+  PRINT_SEP("Coarse Problem Generated")
 
   setup_time = mytimer() - setup_time; // Capture total time of setup
   times[9] = setup_time; // Save it for reporting
@@ -176,6 +187,7 @@ int main(int argc, char * argv[]) {
      curx = 0;
      curxexact = 0;
   }
+  PRINT_SEP("Problem Checked")
 
 
   CGData data;
@@ -200,6 +212,7 @@ int main(int argc, char * argv[]) {
   // Record execution time of reference SpMV and MG kernels for reporting times
   // First load vector with random values
   FillRandomVector(x_overlap);
+  PRINT_SEP("Concluded Initialization")
 
   int numberOfCalls = 10;
   if (quickPath) numberOfCalls = 1; //QuickPath means we do on one call of each block of repetitive code
@@ -215,6 +228,7 @@ int main(int argc, char * argv[]) {
 #ifdef HPCG_DEBUG
   if (rank==0) HPCG_fout << "Total SpMV+MG timing phase execution time in main (sec) = " << mytimer() - t1 << endl;
 #endif
+  PRINT_SEP("Tested Runtime of SpMV+MG")
 
   ///////////////////////////////
   // Reference CG Timing Phase //
@@ -257,6 +271,7 @@ int main(int argc, char * argv[]) {
 #ifdef HPCG_DETAILED_DEBUG
   if (geom->size == 1) WriteProblem(*geom, A, b, x, xexact);
 #endif
+  PRINT_SEP("Tested Runtime of CG")
 
 
   //////////////////////////////
@@ -276,6 +291,7 @@ int main(int argc, char * argv[]) {
 #ifdef HPCG_DEBUG
   if (rank==0) HPCG_fout << "Total validation (TestCG and TestSymmetry) execution time in main (sec) = " << mytimer() - t1 << endl;
 #endif
+  PRINT_SEP("Tested Correctness")
 
 #ifdef HPCG_DEBUG
   t1 = mytimer();
@@ -326,6 +342,7 @@ int main(int argc, char * argv[]) {
     if (rank == 0)
       HPCG_fout << "Failed to reduce the residual " << tolerance_failures << " times." << endl;
   }
+  PRINT_SEP("Optimized CG Setup")
 
   ///////////////////////////////
   // Optimized CG Timing Phase //
@@ -352,12 +369,40 @@ int main(int argc, char * argv[]) {
   testnorms_data.samples = numberOfCgSets;
   testnorms_data.values = new double[numberOfCgSets];
 
+  PRINT_SEP("Beginning of Main Runs Loop")
+
+  #ifdef HPCG_METRICS
+    std::string debugOutput;
+    debugOutput += "[Halo Comm]<Rank " + std::to_string(A.geom->rank) + "> number of neighbors = " + std::to_string(A.numberOfSendNeighbors) + "\n";
+    debugOutput += "Neighbor IDs: ";
+    for (int i = 0; i < A.numberOfSendNeighbors; i++) {
+      debugOutput += std::to_string(A.neighbors[i]) + " ";
+    }
+    debugOutput += "\nMsg sizes: ";
+    for (int i = 0; i < A.numberOfSendNeighbors; i++) {
+      debugOutput += std::to_string(A.sendLength[i]) + " ";
+    }
+
+    debugOutput += "\nAc Neighbor IDs: ";
+    for (int i = 0; i < A.Ac->numberOfSendNeighbors; i++) {
+      debugOutput += std::to_string(A.Ac->neighbors[i]) + " ";
+    }
+    debugOutput += "\nAc Msg sizes: ";
+    for (int i = 0; i < A.Ac->numberOfSendNeighbors; i++) {
+      debugOutput += std::to_string(A.Ac->sendLength[i]) + " ";
+    }
+    HPCG_fout << debugOutput << endl;
+    MPI_Barrier(MPI_COMM_WORLD);
+  #endif
+
   for (int i=0; i< numberOfCgSets; ++i) {
+    PRINT_SEP("Start of Run " << i)
     ZeroVector(x); // Zero out x
     ierr = CG( A, data, b, x, optMaxIters, optTolerance, niters, normr, normr0, &times[0], true);
     if (ierr) HPCG_fout << "Error in call to CG: " << ierr << ".\n" << endl;
     if (rank==0) HPCG_fout << "Call [" << i << "] Scaled Residual [" << normr/normr0 << "]" << endl;
     testnorms_data.values[i] = normr/normr0; // Record scaled residual from this run
+    PRINT_SEP("End of Run " << i)
   }
 
   // Compute difference between known exact solution and computed solution
@@ -372,13 +417,16 @@ int main(int argc, char * argv[]) {
   // Test Norm Results
   ierr = TestNorms(testnorms_data);
 
+  PRINT_SEP("Reporting Results")
+
   ////////////////////
   // Report Results //
   ////////////////////
 
   // Report results to YAML file
   ReportResults(A, numberOfMgLevels, numberOfCgSets, refMaxIters, optMaxIters, &times[0], testcg_data, testsymmetry_data, testnorms_data, global_failure, quickPath);
-
+  
+  PRINT_SEP("Cleanup")
   // Clean up
   DeleteMatrix(A); // This delete will recursively delete all coarse grid data
   DeleteCGData(data);

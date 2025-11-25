@@ -147,24 +147,25 @@ HPCG_Init(int * argc_p, char ** *argv_p, HPCG_Params & params) {
 #endif
 //  for (i = 0; i < nparams; ++i) std::cout << "rank = "<< params.comm_rank << " iparam["<<i<<"] = " << iparams[i] << "\n";
 
-  time ( &rawtime );
-  ptm = localtime(&rawtime);
-  sprintf( fname, "hpcg%04d%02d%02dT%02d%02d%02d.txt",
-      1900 + ptm->tm_year, ptm->tm_mon+1, ptm->tm_mday, ptm->tm_hour, ptm->tm_min, ptm->tm_sec );
+  // time ( &rawtime );
+  // ptm = localtime(&rawtime);
+  // sprintf( fname, "hpcg%04d%02d%02dT%02d%02d%02d.txt",
+  //     1900 + ptm->tm_year, ptm->tm_mon+1, ptm->tm_mday, ptm->tm_hour, ptm->tm_min, ptm->tm_sec );
 
-  if (0 == params.comm_rank) {
-    HPCG_fout.open(fname);
-  } else {
-#if defined(HPCG_DEBUG) || defined(HPCG_DETAILED_DEBUG)
-    // HPCG_fout.basic_ios<char>::rdbuf(std::cout.rdbuf());
-    // HPCG_fout << "HPCG_fout == cout" << std::endl;
-    sprintf( fname, "hpcg%04d%02d%02dT%02d%02d%02d_%d.txt",
-        1900 + ptm->tm_year, ptm->tm_mon+1, ptm->tm_mday, ptm->tm_hour, ptm->tm_min, ptm->tm_sec, params.comm_rank );
-    HPCG_fout.open(fname);
-#else
-    HPCG_fout.open(NULLDEVICE);
-#endif
-  }
+  HPCG_fout.basic_ios<char>::rdbuf(std::cerr.rdbuf());
+//   if (0 == params.comm_rank) {
+//     HPCG_fout.open(fname);
+//   } else {
+// #if defined(HPCG_DEBUG) || defined(HPCG_DETAILED_DEBUG)
+//     // HPCG_fout.basic_ios<char>::rdbuf(std::cout.rdbuf());
+//     // HPCG_fout << "HPCG_fout == cout" << std::endl;
+//     sprintf( fname, "hpcg%04d%02d%02dT%02d%02d%02d_%d.txt",
+//         1900 + ptm->tm_year, ptm->tm_mon+1, ptm->tm_mday, ptm->tm_hour, ptm->tm_min, ptm->tm_sec, params.comm_rank );
+//     HPCG_fout.open(fname);
+// #else
+//     HPCG_fout.open(NULLDEVICE);
+// #endif
+//   }
 
   free( iparams );
 

@@ -110,13 +110,14 @@ HPCG_LIBS     = $(LAlib) $(LAname) $(MPlib) $(MPname)
 # -DHPCG_CONTIGUOUS_ARRAYS Define to have sparse matrix arrays long and contiguous
 # -DHPCG_DEBUG       	Define to enable debugging output
 # -DHPCG_DETAILED_DEBUG Define to enable very detailed debugging output
+# -DHPCG_METRICS        (custom) print to stderr data for computing communication metrics
 #
 # By default HPCG will:
 #    *) Build with MPI enabled.
 #    *) Build with OpenMP enabled.
 #    *) Not generate debugging output.
 #
-HPCG_OPTS     = -DHPCG_DEBUG -DHPCG_DETAILED_DEBUG
+HPCG_OPTS     = -DHPCG_METRICS
 #
 # ----------------------------------------------------------------------
 #

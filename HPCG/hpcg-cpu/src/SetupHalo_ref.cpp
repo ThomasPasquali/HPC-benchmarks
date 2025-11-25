@@ -35,6 +35,14 @@ using std::endl;
 #include <cassert>
 #endif
 
+
+#ifdef HPCG_METRICS
+#include <fstream>
+#include <string>
+using std::endl;
+#include "hpcg.hpp"
+#endif
+
 #include "SetupHalo_ref.hpp"
 #include "mytimer.hpp"
 
@@ -165,20 +173,7 @@ void SetupHalo_ref(SparseMatrix & A) {
   A.sendLength = sendLength;
   A.sendBuffer = sendBuffer;
 
-#ifdef HPCG_DETAILED_DEBUG
-  HPCG_fout << " For rank " << A.geom->rank << " of " << A.geom->size << ", number of neighbors = " << A.numberOfSendNeighbors << endl;
-  for (int i = 0; i < A.numberOfSendNeighbors; i++) {
-    HPCG_fout << "     rank " << A.geom->rank << " neighbor " << neighbors[i] << " send/recv length = " << sendLength[i] << "/" << receiveLength[i] << " sendLength:" << endl << "       ";
-    for (local_int_t j = 0; j<sendLength[i]; ++j) {
-      // HPCG_fout << "       rank " << A.geom->rank << " elementsToSend[" << j << "] = " << elementsToSend[j] << endl;
-      // HPCG_fout << "       rank " << A.geom->rank << " sendLength[" << j << "] = " << sendLength[j] << endl;
-      HPCG_fout  << sendLength[j] << " ";
-    }
-  }
 #endif
-
-#endif
-// ifdef HPCG_NO_MPI
 
   return;
 }

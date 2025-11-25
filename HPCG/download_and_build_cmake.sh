@@ -7,7 +7,7 @@ mkdir -p hpcg-out
 BRANCHNAME=master
 HPCG_PATH=${1:-'hpcg-cpu'}
 cxx_compiler=g++
-additional_cmake_config=
+additional_cmake_config="-DHPCG_ENABLE_METRICS=ON"
 
 if [[ ! -d ${HPCG_PATH} ]]; then
   git clone -b $BRANCHNAME --recursive https://github.com/hpcg-benchmark/hpcg.git ${HPCG_PATH}

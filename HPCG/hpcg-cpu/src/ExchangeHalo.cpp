@@ -25,6 +25,10 @@
 #include "ExchangeHalo.hpp"
 #include <cstdlib>
 
+//FIXME delete
+#include <string>
+#include <iostream>
+
 /*!
   Communicates data that is at the border of the part of the domain assigned to this processor.
 
@@ -85,17 +89,25 @@ void ExchangeHalo(const SparseMatrix & A, Vector & x) {
   // Send to each neighbor
   //
 
+  std::string dbg = "*Rank ";
+  dbg += std::to_string(rank);
+  dbg += "* send sizes: ";
+
   // TODO: Thread this loop
   for (int i = 0; i < num_neighbors; i++) {
     local_int_t n_send = sendLength[i];
     MPI_Send(sendBuffer, n_send, MPI_DOUBLE, neighbors[i], MPI_MY_TAG, MPI_COMM_WORLD);
     sendBuffer += n_send;
+    dbg += std::to_string(n_send);
+    dbg += " ";
   }
 
   //
   // Complete the reads issued above
   //
 
+  std::cerr << dbg << std::endl;
+  
   MPI_Status status;
   // TODO: Thread this loop
   for (int i = 0; i < num_neighbors; i++) {

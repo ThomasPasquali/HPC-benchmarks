@@ -15,6 +15,7 @@ option(HPCG_ENABLE_CONTIGUOUS_ARRAYS "Enable contiguous arrays for better cache 
 option(HPCG_ENABLE_CUBIC_RADICAL_SEARCH "Enable faster search for optimal 3D process grid" OFF)
 option(HPCG_ENABLE_DEBUG "Enable debug build" OFF)
 option(HPCG_ENABLE_DETAILED_DEBUG "Enable detailed debug build" OFF)
+option(HPCG_ENABLE_METRICS "Enable communication metrics prints" OFF)
 option(HPCG_ENABLE_MPI "Enable MPI support" OFF)
 option(HPCG_ENABLE_LONG_LONG "Enable use of 'long long' type for global indices" ON)
 option(HPCG_ENABLE_OPENMP "Enable OpenMP support" OFF)
@@ -48,6 +49,10 @@ endif ()
 
 if (HPCG_ENABLE_DETAILED_DEBUG)
     target_compile_definitions(xhpcg PRIVATE HPCG_DETAILED_DEBUG)
+endif ()
+
+if (HPCG_ENABLE_METRICS)
+    target_compile_definitions(xhpcg PRIVATE HPCG_ENABLE_METRICS)
 endif ()
 
 if (HPCG_ENABLE_MPI)
