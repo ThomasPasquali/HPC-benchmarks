@@ -31,33 +31,20 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <unistd.h>
+#include <ccutils/mpi/mpi_macros.h>
 
-#define NUM_BFS_ROOTS 64
+#define NUM_BFS_ROOTS 2
 int run_number = 0;
 
 /****** CUSTOM STATS ******/
 
 // defined in common.h
 CustomCommStats* bfs_custom_comm_stats;
+CustomPacketStats* bfs_custom_packet_stats;
+uint32_t bfs_custom_packet_stats_i;
 double *bfs_custom_comm_timer;
 
 extern int size;
-
-void print_custom_metrics(int rank, int size) {
-    for (int run = 0; run < NUM_BFS_ROOTS; run++) {
-        // Print barrier wait time per run
-        printf("[METRIC] rank=%d run=%d barrier_wait_time=%.6f\n", rank, run, bfs_custom_comm_timer[run]);
-
-        for (int peer = 0; peer < size; peer++) {
-            if (peer == rank) continue;
-
-            int idx = run * size * (size - 1) + rank * (size - 1) + (peer < rank ? peer : peer - 1);
-            CustomCommStats *stats = &bfs_custom_comm_stats[idx];
-
-            printf("[METRIC] rank=%d run=%d dest=%d n_comms=%d volume=%zu\n", rank, run, peer, stats->n_comms, stats->comms_volume);
-        }
-    }
-}
 
 /****** END CUSTOM STATS ******/
 
@@ -104,7 +91,12 @@ int main(int argc, char** argv) {
 
 	// Custom
 	bfs_custom_comm_stats = (CustomCommStats*)malloc(NUM_BFS_ROOTS*size*(size-1)*sizeof(CustomCommStats));
+	bfs_custom_packet_stats = (CustomPacketStats*)malloc(NUM_BFS_ROOTS*MAX_CUSTOM_PACKET_STATS_PER_RUN*sizeof(CustomPacketStats));
 	bfs_custom_comm_timer = (double*)malloc(NUM_BFS_ROOTS * sizeof(double));
+
+	for (size_t i = 0; i < NUM_BFS_ROOTS*MAX_CUSTOM_PACKET_STATS_PER_RUN; i++) {
+		bfs_custom_packet_stats[i].comm_time = 0.0;
+	}
 	for (size_t i = 0; i < NUM_BFS_ROOTS*size*(size-1); i++) {
 		bfs_custom_comm_stats[i].n_comms = 0;
 		bfs_custom_comm_stats[i].comms_volume = 0;
@@ -112,7 +104,13 @@ int main(int argc, char** argv) {
 	for (size_t i = 0; i < NUM_BFS_ROOTS; i++) {
 		bfs_custom_comm_timer[i] = 0.0;
 	}
-	
+
+	MPI_SECTION_DEF(node_names, "Processed node names")
+	char host_name[MPI_MAX_PROCESSOR_NAME];
+	int namelen;
+	MPI_Get_processor_name(host_name,&namelen);
+	MPI_ALL_PRINT(fprintf(fp, "%s\n", host_name);)
+	MPI_SECTION_END(node_names)
 
 	/* Parse arguments. */
 	int SCALE = 16;
@@ -330,18 +328,12 @@ int main(int argc, char** argv) {
 
 	double make_graph_stop = MPI_Wtime();
 	double make_graph_time = make_graph_stop - make_graph_start;
-	if (rank == 0) { /* Not an official part of the results */
-		fprintf(stderr, "graph_generation:               %f s\n", make_graph_time);
-	}
 
 	/* Make user's graph data structure. */
 	double data_struct_start = MPI_Wtime();
 	make_graph_data_structure(&tg);
 	double data_struct_stop = MPI_Wtime();
 	double data_struct_time = data_struct_stop - data_struct_start;
-	if (rank == 0) { /* Not an official part of the results */
-		fprintf(stderr, "construction_time:              %f s\n", data_struct_time);
-	}
 
 	//generate non-isolated roots
 	{
@@ -418,6 +410,7 @@ int main(int argc, char** argv) {
 			#endif
 
 			clean_pred(&pred[0]); //user-provided function from bfs_implementation.c
+			bfs_custom_packet_stats_i = bfs_root_idx * MAX_CUSTOM_PACKET_STATS_PER_RUN;
 			/* Do the actual BFS. */
 			double bfs_start = MPI_Wtime();
 			run_bfs(root, &pred[0]);
@@ -445,7 +438,7 @@ int main(int argc, char** argv) {
 
 			/* Validate result. */
 			if (!getenv("SKIP_VALIDATION")) {
-				if (rank == 0) fprintf(stderr, "Validating BFS %d\n", bfs_root_idx);
+				// if (rank == 0) fprintf(stderr, "Validating BFS %d\n", bfs_root_idx);
 
 				double validate_start = MPI_Wtime();
 				int validation_passed_one = validate_result(1,&tg, nlocalverts, root, pred,shortest,&edge_visit_count);
@@ -561,6 +554,7 @@ int main(int argc, char** argv) {
 
 	/* Print results. */
 	if (rank == 0) {
+		MPI_SECTION_DEF(general_results, "Graph500 Official Results")
 		if (!validation_passed) {
 			fprintf(stdout, "No results printed for invalid run.\n");
 		} else {
@@ -663,17 +657,47 @@ int main(int argc, char** argv) {
 			}
 #endif
 		}
+		MPI_SECTION_END(general_results)
 	}
 	
 	// Custom stats
 	fflush(stdout);
 	MPI_Barrier(MPI_COMM_WORLD);
-	for (size_t r = 0; r < size; r++) {
-		if (rank == r) print_custom_metrics(rank, size);
-		fflush(stdout);
-		MPI_Barrier(MPI_COMM_WORLD);
-		sleep(1);
-	}
+	MPI_SECTION_DEF(detailed_results, "Detailed BFS Metrics")
+	MPI_ALL_PRINT_NAMED(barrier_times,
+		for (int run = 0; run < NUM_BFS_ROOTS; run++) {
+			fprintf(fp, "%.6f ", bfs_custom_comm_timer[run]);
+		}
+		fprintf(fp, "\n");
+	)
+	MPI_ALL_PRINT_NAMED(packet_bandwidth,
+		for (int run = 0; run < NUM_BFS_ROOTS; run++) {
+			uint32_t i = run*MAX_CUSTOM_PACKET_STATS_PER_RUN;
+			while (bfs_custom_packet_stats[i].comm_time != 0.0) {
+				fprintf(fp, "(%d,%d,%.6f) ", 
+					bfs_custom_packet_stats[i].source, 
+					bfs_custom_packet_stats[i].destination, 
+					bfs_custom_packet_stats[i].comm_time);
+				++i;
+			}
+			fprintf(fp, "\n");
+		}
+	)
+	
+	// TODO single packet bw
+	// MPI_ALL_PRINT_NAMED(packet_stats,
+	// 	for (int run = 0; run < NUM_BFS_ROOTS; run++) {
+	// 		for (int peer = 0; peer < size; peer++) {
+	// 			if (peer == rank) continue;
+
+	// 			int idx = run * size * (size - 1) + rank * (size - 1) + (peer < rank ? peer : peer - 1);
+	// 			CustomCommStats *stats = &bfs_custom_comm_stats[idx];
+
+	// 			fprintf(fp, "[METRIC] rank=%d run=%d dest=%d n_comms=%d volume=%zu\n", rank, run, peer, stats->n_comms, stats->comms_volume);
+	// 		}
+	// 	}
+	// )
+	MPI_SECTION_END(detailed_results)
 	fflush(stdout);
 	MPI_Barrier(MPI_COMM_WORLD);
 

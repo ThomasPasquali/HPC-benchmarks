@@ -119,7 +119,7 @@ void sendedgepreddist(unsigned vloc,unsigned int vedge) {
 	aml_send(&m,1,sizeof(edgedist),VERTEX_OWNER(COLUMN(vedge)));
 }
 
-#define DUMPERROR(text) { printf("Validation Error: %s, edge %llu %llu weight %f pred0 %llu pred1 %llu dist0 %f dist1 %f\n",text,v0,v1,w,predv0,predv1,distv0,distv1); val_errors++; return; }
+#define DUMPERROR(text) { printf("Validation Error: %s, edge %lu %lu weight %f pred0 %lu pred1 %lu dist0 %f dist1 %f\n",text,v0,v1,w,predv0,predv1,distv0,distv1); val_errors++; return; }
 
 //main validation handler: tracks all edges and at delivery has both vertex preds and distances to be checked
 void edgepreddisthndl(int frompe,void* data,int sz) {

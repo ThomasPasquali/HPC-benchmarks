@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <search.h>
+#include <ccutils/mpi/mpi_macros.h>
 
 int64_t nverts_known = 0;
 int *degrees;
@@ -105,7 +106,6 @@ void convert_graph_to_oned_csr(const tuple_graph* const tg, oned_csr_graph* cons
 	g->nlocalverts = nlocalverts;
 
 	//graph stats printing
-#ifdef DEBUGSTATS
 	long maxdeg=0,isolated=0,totaledges=0,originaledges;
 	long maxlocaledges,minlocaledges;
 	for(i=0;i<g->nlocalverts;i++) {
@@ -124,13 +124,22 @@ void convert_graph_to_oned_csr(const tuple_graph* const tg, oned_csr_graph* cons
 	aml_long_allmax(&maxlocaledges);
 	long averageedges = totaledges/num_pes();
 	double disbalance = (double)(maxlocaledges-minlocaledges)/(double)averageedges * 100.0;
-	if(!my_pe()) printf("\n maxdeg %lld verts %lld, isolated %lld edges %lld\n\t A max %ld min %ld ave %ld delta %ld percent %3.2f\n ",
-			maxdeg,g->nglobalverts,isolated,totaledges,maxlocaledges,minlocaledges,averageedges,maxlocaledges-minlocaledges,disbalance);
-
-	// finished stats printing
+	MPI_SECTION_DEF(graph_stats, "Statistics on Generated Graph")
+	MPI_PRINTF_ONCE(
+		"vertices:%ld\nedges:%ld\nisolated:%ld\nmaxdeg:%ld\nmaxlocaledges:%ld\nminlocaledges:%ld\navglocaledges:%ld\n(max-min)/avg*100: %3.2f\n ",
+		g->nglobalverts,
+		totaledges,
+		isolated,
+		maxdeg,
+		maxlocaledges,
+		minlocaledges,
+		averageedges,
+		disbalance
+	);
+	MPI_SECTION_END(graph_stats)
 
 	g->notisolated=g->nglobalverts-isolated;
-#endif
+	
 	unsigned int *rowstarts = xmalloc((nlocalverts + 1) * sizeof(int));
 	g->rowstarts = rowstarts;
 

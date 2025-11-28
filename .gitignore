@@ -23,5 +23,7 @@ bin/
 
 HPCG/hpcg-cpu/bin
 
+Graph500/graph500/src/build
+
 HPL/hpl/
 HPL/HPL.dat
