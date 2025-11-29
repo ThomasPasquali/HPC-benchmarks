@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
+#include <ccutils/mpi/mpi_macros.h>
 
 #ifdef __APPLE__
 #define SYSCTL_CORE_COUNT   "machdep.cpu.core_count"
@@ -100,7 +101,9 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size,
 #define NSEND_intra 4 // number of send intranode
 #define SOATTR __attribute__((visibility("default")))
 
-#define SENDSOURCE(node) ( sendbuf+(AGGR*nbuf[node]))
+// Custom timestamp at the beginning of each per-node buffer
+#define TIMESTAMP_SIZE sizeof(double)
+#define SENDSOURCE(node) (sendbuf + (AGGR + TIMESTAMP_SIZE) * nbuf[node] + TIMESTAMP_SIZE)
 #define SENDSOURCE_intra(node) ( sendbuf_intra+(AGGR_intra*nbuf_intra[node]) )
 
 #define ushort unsigned short
@@ -123,9 +126,11 @@ volatile static int inbarrier=0;
 
 static void (*aml_handlers[256]) (int,void *,int); //pointers to user-provided AM handlers
 
-
-extern CustomCommStats *bfs_custom_comm_stats;
+// extern CustomCommStats *bfs_custom_comm_stats;
+extern CustomPacketStats* bfs_custom_packet_stats;
+extern uint32_t bfs_custom_packet_stats_i;
 extern int run_number;
+extern double *clock_offsets;
 
 //internode comm (proc number X from each group)
 //intranode comm (all cores of one nodegroup)
@@ -139,7 +144,7 @@ static ushort *nbuf; //actual buffer for each group/localcore
 static ushort activebuf[NSEND];// N_buffer used in transfer(0..NSEND{_intra}-1)
 static MPI_Request rqsend[NSEND];
 // MPI stuff for recv
-static char recvbuf[AGGR*NRECV];
+static char recvbuf[(AGGR + TIMESTAMP_SIZE)*NRECV];
 static MPI_Request rqrecv[NRECV];
 
 unsigned long long nbytes_sent,nbytes_rcvd;
@@ -150,13 +155,62 @@ static ushort *acks_intra;
 static ushort *nbuf_intra;
 static ushort activebuf_intra[NSEND_intra];
 static MPI_Request rqsend_intra[NSEND_intra];
-static char recvbuf_intra[AGGR_intra*NRECV_intra];
+static char recvbuf_intra[(AGGR_intra + TIMESTAMP_SIZE) * NRECV_intra];
 static MPI_Request rqrecv_intra[NRECV_intra];
 volatile static int ack_intra=0;
 inline void aml_send_intra(void *srcaddr, int type, int length, int local ,int from);
 
 void aml_finalize(void);
 void aml_barrier(void);
+
+// Custom
+void calibrate_clocks() {
+    const int SAMPLES = 100;
+    double local_times[SAMPLES];
+    double remote_times[SAMPLES];
+    
+    clock_offsets = malloc(num_procs * sizeof(double));
+    
+    if (myproc == 0) {
+        // Root process
+        for (int pe = 1; pe < num_procs; pe++) {
+            double min_rtt = 1e9;
+            double best_offset = 0;
+            
+            for (int i = 0; i < SAMPLES; i++) {
+                double t0 = MPI_Wtime();
+                MPI_Send(&t0, 1, MPI_DOUBLE, pe, 0, MPI_COMM_WORLD);
+                
+                double remote_time;
+                MPI_Recv(&remote_time, 1, MPI_DOUBLE, pe, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+                
+                double t1 = MPI_Wtime();
+                double rtt = t1 - t0;
+                
+                if (rtt < min_rtt) {
+                    min_rtt = rtt;
+                    // Assume symmetric network delay
+                    best_offset = remote_time - (t0 + rtt/2);
+                }
+            }
+            clock_offsets[pe] = best_offset;
+        }
+        clock_offsets[0] = 0.0; // Root has no offset
+        
+    } else {
+        // Other processes
+        for (int i = 0; i < SAMPLES; i++) {
+            double root_time;
+            MPI_Recv(&root_time, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            
+            double my_time = MPI_Wtime();
+            MPI_Send(&my_time, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        }
+    }
+    
+    // Broadcast offsets to all processes
+    MPI_Bcast(clock_offsets, num_procs, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+}
 
 SOATTR void aml_register_handler(void(*f)(int,void*,int),int n) { aml_barrier(); aml_handlers[n]=f; aml_barrier(); }
 
@@ -167,7 +221,20 @@ struct __attribute__((__packed__)) hdr { //header of internode message
 };
 //process internode messages
 static void process(int fromgroup,int length ,char* message) {
-	int i = 0;
+	// Extract timestamp from the buffer beginning
+	double send_timestamp;
+	memcpy(&send_timestamp, message, sizeof(double));
+	// Record bandwidth measurement
+	if (MAX_CUSTOM_PACKET_STATS_PER_RUN - (bfs_custom_packet_stats_i%MAX_CUSTOM_PACKET_STATS_PER_RUN) > 0) {
+		double adjusted_recv_time = MPI_Wtime() - clock_offsets[myproc];
+		bfs_custom_packet_stats[bfs_custom_packet_stats_i].comm_time = adjusted_recv_time - send_timestamp;
+		bfs_custom_packet_stats[bfs_custom_packet_stats_i].source = PROC_FROM_GROUPLOCAL(fromgroup,mylocal);
+		bfs_custom_packet_stats[bfs_custom_packet_stats_i].destination = myproc;
+		bfs_custom_packet_stats[bfs_custom_packet_stats_i].buffer_size = length - TIMESTAMP_SIZE;
+		bfs_custom_packet_stats_i++;
+	}
+
+	int i = TIMESTAMP_SIZE;
 	int from = PROC_FROM_GROUPLOCAL(fromgroup,mylocal);
 	while ( i < length ) {
 		void* m = message+i;
@@ -175,11 +242,13 @@ static void process(int fromgroup,int length ,char* message) {
 		int hsz=h->sz;
 		int hndl=h->hndl;
 		int destlocal = LOCAL_FROM_PROC(h->routing);
+		// Register received message (update frontier)
 		if(destlocal == mylocal)
 			aml_handlers[hndl](from,m+sizeof(struct hdr),hsz);
 		else
 			aml_send_intra(m+sizeof(struct hdr),hndl,hsz,destlocal,from);
 		i += hsz + sizeof(struct hdr);
+
 	}
 }
 struct __attribute__((__packed__)) hdri { //header of internode message
@@ -215,7 +284,7 @@ inline void aml_poll_intra(void) {
 				MPI_Send(NULL, 0, MPI_CHAR,from, 1, comm_intra); //ack now
 			else
 				acks_intra[from]++; //normally we have delayed ack
-			process_intra( from, length,recvbuf_intra +AGGR_intra*index);
+			process_intra(from, length, recvbuf_intra + (AGGR_intra + TIMESTAMP_SIZE)*index);
 		}
 		MPI_Start( rqrecv_intra+index);
 	}
@@ -238,7 +307,7 @@ static void aml_poll(void) {
 				MPI_Send(NULL, 0, MPI_CHAR,from, 1, comm); //ack now
 			else
 				acks[from]++; //normally we have delayed ack
-			process( from, length,recvbuf+AGGR*index );
+			process(from, length, recvbuf + (AGGR + TIMESTAMP_SIZE)*index);
 		}
 		MPI_Start( rqrecv+index );
 	}
@@ -255,11 +324,17 @@ inline void flush_buffer( int node ) {
 	}
 
 	// Custom stats
-	++(bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].n_comms);
-	bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].comms_volume += sendsize[node];
+	// ++(bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].n_comms);
+	// bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].comms_volume += sendsize[node];
 
-	MPI_Isend(SENDSOURCE(node), sendsize[node], MPI_CHAR,node, acks[node], comm, rqsend+index );
-	nbytes_sent+=sendsize[node];
+	// Get buffer start (includes reserved timestamp space)
+	char* buffer_with_timestamp = sendbuf + (AGGR + TIMESTAMP_SIZE) * nbuf[node];
+	double send_time = MPI_Wtime() - clock_offsets[myproc];
+	memcpy(buffer_with_timestamp, &send_time, sizeof(double));
+
+	MPI_Isend(buffer_with_timestamp, sendsize[node] + TIMESTAMP_SIZE, MPI_CHAR,node, acks[node], comm, rqsend+index );
+
+	nbytes_sent+=sendsize[node] + TIMESTAMP_SIZE;
 	if (sendsize[node] > 0) ack++;
 	sendsize[node] = 0;
 	acks[node] = 0;
@@ -276,8 +351,8 @@ inline void flush_buffer_intra( int node ) {
 	}
 
 	// Custom stats
-	++(bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].n_comms);
-	bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].comms_volume += sendsize_intra[node];
+	// ++(bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].n_comms);
+	// bfs_custom_comm_stats[CUSTOM_COMM_STATS_IDX(rank, node)].comms_volume += sendsize_intra[node];
 
 	MPI_Isend( SENDSOURCE_intra(node), sendsize_intra[node], MPI_CHAR,
 			node, acks_intra[node], comm_intra, rqsend_intra+index );
@@ -347,6 +422,14 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 	char (*host_names)[MPI_MAX_PROCESSOR_NAME];
 	int namelen,bytes,n,color;
 	MPI_Get_processor_name(host_name,&namelen);
+	#ifdef FORCE_INTERNODE_ONLY
+		color = myproc;
+		sprintf(host_name + namelen, "_%d", myproc);
+		namelen = strlen(host_name);
+	#endif
+	MPI_SECTION_DEF(node_names, "Processed node names")
+	MPI_ALL_PRINT_NAMED(node_names, fprintf(fp, "%s\n", host_name);)
+	MPI_SECTION_END(node_names)
 
 	bytes = num_procs * sizeof(char[MPI_MAX_PROCESSOR_NAME]);
 	host_names = (char (*)[MPI_MAX_PROCESSOR_NAME]) malloc(bytes);
@@ -354,11 +437,13 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 	for (n=0; n<num_procs; n++)
 		MPI_Bcast(&(host_names[n]),MPI_MAX_PROCESSOR_NAME, MPI_CHAR, n, MPI_COMM_WORLD);
 	qsort(host_names, num_procs, sizeof(char[MPI_MAX_PROCESSOR_NAME]), stringCmp);
-	color = 0;
-	for (n=0; n<num_procs; n++)  {
-		if(n>0 && strcmp(host_names[n-1], host_names[n])) color++;
-		if(strcmp(host_name, host_names[n]) == 0) break;
-	}
+	#ifndef FORCE_INTERNODE_ONLY
+		color = 0;
+		for (n=0; n<num_procs; n++)  {
+			if(n>0 && strcmp(host_names[n-1], host_names[n])) color++;
+			if(strcmp(host_name, host_names[n]) == 0) break;
+		}
+	#endif
 	free(host_names);
 	MPI_Comm_split(MPI_COMM_WORLD, color, myproc, &comm_intra);
 
@@ -390,25 +475,31 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 
 	CPU_SET(mylocal,&cpuset); //FIXME ? would it work good enough on all architectures?
 	pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-#ifdef DEBUGSTATS
-	if(myproc==0) printf ("AML: multicore, num_groups %d group_size %d\n",num_groups,group_size);
-#ifdef PROCS_PER_NODE_NOT_POWER_OF_TWO
-	if(myproc==0) printf ("AML: multicore, PROCS_PER_NODE_NOT_POWER_OF_TWO defined\n");
-#else
-	if(myproc==0) printf ("AML: multicore, loggroup=%d groupmask=%d\n",loggroup,groupmask);
-#endif
-	if(myproc==0) printf ("NRECV=%d NRECVi=%d NSEND=%d  NSENDi=%d AGGR=%dK AGGRi=%dK\n",NRECV,NRECV_intra,NSEND,NSEND_intra,AGGR>>10,AGGR_intra>>10);
-#endif
+
+	MPI_SECTION_DEF(bfs_config, "BFS Communication and Local Configuration")
+	MPI_PRINTF_ONCE("multicore=true\nnum_groups=%d\ngroup_size=%d\n", num_groups, group_size);
+	MPI_PRINTF_ONCE("loggroup=%d\ngroupmask=%d\n", loggroup, groupmask);
+	MPI_PRINTF_ONCE("NRECV=%d\nNRECVi=%d\nNSEND=%d\nNSENDi=%d\nAGGR=%dK\nAGGRi=%dK\n",NRECV,NRECV_intra,NSEND,NSEND_intra,AGGR>>10,AGGR_intra>>10);
+	#ifdef PROCS_PER_NODE_NOT_POWER_OF_TWO
+		MPI_PRINTF_ONCE("PROCS_PER_NODE_POWER_OF_TWO=false\n");
+	#else
+		MPI_PRINTF_ONCE("PROCS_PER_NODE_POWER_OF_TWO=true\n");
+	#endif
+	MPI_SECTION_END(bfs_config)
 	if(num_groups>MAXGROUPS) { if(myproc==0) printf("AML:v1.0 reference:unsupported num_groups > MAXGROUPS=%d\n",MAXGROUPS); exit(-1); }
 	fflush(NULL);
 	//init preposted recvs: NRECV internode
 	for(i=0;i<NRECV;i++)  {
-		r = MPI_Recv_init( recvbuf+AGGR*i, AGGR, MPI_CHAR,MPI_ANY_SOURCE, MPI_ANY_TAG, comm,rqrecv+i );
-		if ( r != MPI_SUCCESS ) return r;
+		r = MPI_Recv_init(  recvbuf + (AGGR + TIMESTAMP_SIZE)*i, 
+							AGGR + TIMESTAMP_SIZE, 
+							MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, 
+							comm, rqrecv+i);
+    	if (r != MPI_SUCCESS) return r;
 	}
-	sendbuf = malloc( AGGR*(num_groups+NSEND));
-	if ( !sendbuf ) return -1;
-	memset(sendbuf,0,AGGR*(num_groups+NSEND));
+	// Allocate extra space for timestamps at the start of each buffer
+	sendbuf = malloc((AGGR + TIMESTAMP_SIZE) * (num_groups + NSEND));
+	if (!sendbuf) return -1;
+	memset(sendbuf, 0, (AGGR + TIMESTAMP_SIZE) * (num_groups + NSEND));
 	sendsize = malloc( num_groups*sizeof(*sendsize) );
 	if (!sendsize) return -1;
 	acks = malloc( num_groups*sizeof(*acks) );
@@ -417,9 +508,12 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 	if (!nbuf) return -1;
 
 
-	for(i=0;i<NRECV_intra;i++)  {
-		r = MPI_Recv_init( recvbuf_intra+AGGR_intra*i, AGGR_intra, MPI_CHAR,MPI_ANY_SOURCE, MPI_ANY_TAG, comm_intra,rqrecv_intra+i );
-		if ( r != MPI_SUCCESS ) return r;
+	for(i=0; i<NRECV_intra; i++) {
+		r = MPI_Recv_init(  recvbuf_intra + (AGGR_intra + TIMESTAMP_SIZE)*i, 
+							AGGR_intra + TIMESTAMP_SIZE, 
+							MPI_CHAR, MPI_ANY_SOURCE, MPI_ANY_TAG, 
+							comm_intra, rqrecv_intra+i);
+		if (r != MPI_SUCCESS) return r;
 	}
 	sendbuf_intra = malloc( AGGR_intra*(group_size+NSEND_intra));
 	if ( !sendbuf_intra ) return -1;
@@ -450,6 +544,9 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 		MPI_Isend( NULL, 0, MPI_CHAR, MPI_PROC_NULL, 0, comm, rqsend+j );
 		activebuf[j]=num_groups+j;
 	}
+
+	// Custom
+	calibrate_clocks();
 	return 0;
 }
 

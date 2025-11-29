@@ -32,8 +32,9 @@ IMPLEMENTATION_NAMES_MAP = {
 FIG_SIZE_SCALING = (10, 5)
 
 EXCLUDED_IMPLEMENTATIONS = [] # ['classic']
-AVERAGE_PACKET_SIZE_MEAN_AND_STD = True
-REMOVE_OUTLIERS = True
+AVERAGE_PACKET_SIZE_MEAN_AND_STD = False
+REMOVE_OUTLIERS = False
+FORCE_Y_LIMS = False
 
 # def make_plots(data):
 #   # Group by (scale, ef)
@@ -184,8 +185,10 @@ REMOVE_OUTLIERS = True
 
 def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
   cluster_color_map = create_color_map(df_aggr.sort_values('cluster')['cluster'].unique())
+  cluster_marker_map = create_marker_map(df_aggr.sort_values('cluster')['cluster'].unique())
   partition_linestyle_map = create_linestyle_map(df_aggr.sort_values('partition')['partition'].unique())
   implementation_marker_map = create_marker_map(df_aggr.sort_values('impl')['impl'].unique())
+  cluster_partition_marker_map = create_marker_map((df_aggr['cluster']+'-'+df_aggr['partition']).sort_values().unique())
   
   cluster_linestyle_map = create_linestyle_map(df_aggr.sort_values('cluster')['cluster'].unique())
   partition_marker_map = create_marker_map(df_aggr.sort_values('partition')['partition'].unique())
@@ -202,7 +205,7 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
   # scale to GTEPS
   all_vals = [v / 1e6 for v in all_vals]
   ymin, ymax = min(all_vals), max(all_vals)
-  print(f'{ymin=}    {ymax=}')
+  # print(f'{ymin=}    {ymax=}')
 
   # optional: pad for aesthetics
   y_pad = 0.05 * (ymax - ymin if ymax > ymin else 1.0)
@@ -223,6 +226,7 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
       # color = cluster_color_map[cluster]
       # linestyle = partition_linestyle_map[partition]
       # marker = implementation_marker_map[impl]
+      
       color = implementation_color_map[impl]
       linestyle = cluster_linestyle_map[cluster]
       marker = partition_marker_map[partition]
@@ -232,7 +236,8 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
       plt.plot(nodes, teps_or_cut_teps_vals/1e6, color=color, marker=marker, markersize=8, linestyle=linestyle, label=f"{label_base}-CUT GTEPS")
       x_ticks_nodes |= set(nodes.values)
 
-    plt.ylim(ymin, ymax) 
+    if FORCE_Y_LIMS:
+      plt.ylim(ymin, ymax) 
     plt.title(f"Graph500 Scaling - Scale={scale}, Edgefactor={ef}")
     plt.xlabel("Nodes")
     plt.ylabel("GTEPS and CUT GTEPS")
@@ -261,21 +266,26 @@ def make_plots(df_aggr: pd.DataFrame, df: pd.DataFrame):
         # linestyle = partition_linestyle_map[partition]
         # marker = implementation_marker_map[impl]
         
+        # color = implementation_color_map[impl]
+        # linestyle = cluster_linestyle_map[cluster]
+        # marker = partition_marker_map[partition]
+        
         color = implementation_color_map[impl]
-        linestyle = cluster_linestyle_map[cluster]
-        marker = partition_marker_map[partition]
+        linestyle = '-'
+        marker = cluster_partition_marker_map[f'{cluster}-{partition}']
         
         label_base = f"{cluster}-{partition}-{impl}"
         plt.plot(nodes, teps_or_cut_teps_vals/1e6, color=color, marker=marker, markersize=8, linestyle=linestyle, label=f"{label_base}")
         x_ticks_nodes |= set(nodes.values)
 
-      plt.ylim(ymin, ymax) 
+      if FORCE_Y_LIMS:
+        plt.ylim(ymin, ymax) 
       plt.title(f"Graph500 Scaling - Scale={scale}, Edgefactor={ef}")
       plt.xlabel("Nodes")
       plt.ylabel('G'+metric.upper().replace('_', ' '))
       plt.xticks(sorted(list(x_ticks_nodes)))
       plt.grid(True, linestyle="--", linewidth=0.5, alpha=0.7)
-      plt.legend(title="Cluster-Partition/Config-Implementation")
+      plt.legend(title="Cluster-Partition-Implementation")
       plt.tight_layout()
       path = OUT_DIR / 'scaling' / f'Graph500_scaling_{metric}_s{scale}_ef{ef}.png'
       path.parent.mkdir(parents=True, exist_ok=True)
@@ -552,5 +562,8 @@ if __name__ == "__main__":
   
   # with pd.option_context('display.max_rows', None):
   #   print(df[(df['nodes']==4) & (df['scale']==21) & (df['edgefactor']==32)])
+  
+  print('Plots will contain data from the following cluster-partition combinations:')
+  print((df_aggr['cluster']+'-'+df_aggr['partition']).unique())
   
   make_plots(df_aggr, df)

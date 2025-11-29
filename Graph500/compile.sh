@@ -10,21 +10,21 @@ cd graph500/src
 mkdir -p ../../bin
 
 # Standard benchmark
-make clean
-CFLAGS="-DBENCHPIN" make
-mv graph500_reference_bfs_sssp ../../bin
+make deep_clean
+CFLAGS="-DBENCHPIN" make graph500_reference_bfs
+# mv graph500_reference_bfs_sssp ../../bin
 mv graph500_reference_bfs ../../bin
 
 # Benchmarks that flushes the buffer more often: after 512 vertices instead of 8192
 make clean
-CFLAGS="-DBENCHPIN" PREPROCESSOR_FLAGS="-DAGGR_intra=2048 -DAGGR=2048" make
-mv graph500_reference_bfs_sssp ../../bin/graph500_reference_bfs_sssp_smallbuf
+CFLAGS="-DBENCHPIN" PREPROCESSOR_FLAGS="-DAGGR_intra=2048 -DAGGR=2048" make graph500_reference_bfs
+# mv graph500_reference_bfs_sssp ../../bin/graph500_reference_bfs_sssp_smallbuf
 mv graph500_reference_bfs ../../bin/graph500_reference_bfs_smallbuf
 
 # Benchmarks that flushes the buffer less often: after 512 vertices instead of 8192
 make clean
-CFLAGS="-DBENCHPIN" PREPROCESSOR_FLAGS="-DAGGR_intra=524288 -DAGGR=524288" make
-mv graph500_reference_bfs_sssp ../../bin/graph500_reference_bfs_sssp_largebuf
+CFLAGS="-DBENCHPIN" PREPROCESSOR_FLAGS="-DAGGR_intra=524288 -DAGGR=524288" make graph500_reference_bfs
+# mv graph500_reference_bfs_sssp ../../bin/graph500_reference_bfs_sssp_largebuf
 mv graph500_reference_bfs ../../bin/graph500_reference_bfs_largebuf
 
 echo "WARNING: currently only BFS implements custom metric correctly."

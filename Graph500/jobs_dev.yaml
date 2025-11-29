@@ -1,0 +1,15 @@
+sequential: true
+
+variables:
+  nodes: [4]
+  partition: ["ib"]
+  bin: ["graph500_reference_bfs_largebuf", "graph500_reference_bfs_smallbuf"]
+  scale: [20]
+  edgefactor: [32]
+
+command: "mpirun -np {nodes} ./bin/{bin} {scale} {edgefactor}"
+
+jobs:
+  - config: "{partition}_{nodes}nodes"
+    config_jobs:
+      - tag: "graph500_{partition}"

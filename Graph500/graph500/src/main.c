@@ -39,10 +39,11 @@ int run_number = 0;
 /****** CUSTOM STATS ******/
 
 // defined in common.h
-CustomCommStats* bfs_custom_comm_stats;
+// CustomCommStats* bfs_custom_comm_stats;
 CustomPacketStats* bfs_custom_packet_stats;
 uint32_t bfs_custom_packet_stats_i;
 double *bfs_custom_comm_timer;
+double *clock_offsets;
 
 extern int size;
 
@@ -90,27 +91,31 @@ int main(int argc, char** argv) {
 	setup_globals();
 
 	// Custom
-	bfs_custom_comm_stats = (CustomCommStats*)malloc(NUM_BFS_ROOTS*size*(size-1)*sizeof(CustomCommStats));
+	// bfs_custom_comm_stats = (CustomCommStats*)malloc(NUM_BFS_ROOTS*size*(size-1)*sizeof(CustomCommStats));
 	bfs_custom_packet_stats = (CustomPacketStats*)malloc(NUM_BFS_ROOTS*MAX_CUSTOM_PACKET_STATS_PER_RUN*sizeof(CustomPacketStats));
 	bfs_custom_comm_timer = (double*)malloc(NUM_BFS_ROOTS * sizeof(double));
 
 	for (size_t i = 0; i < NUM_BFS_ROOTS*MAX_CUSTOM_PACKET_STATS_PER_RUN; i++) {
 		bfs_custom_packet_stats[i].comm_time = 0.0;
 	}
-	for (size_t i = 0; i < NUM_BFS_ROOTS*size*(size-1); i++) {
-		bfs_custom_comm_stats[i].n_comms = 0;
-		bfs_custom_comm_stats[i].comms_volume = 0;
-	}
+	// for (size_t i = 0; i < NUM_BFS_ROOTS*size*(size-1); i++) {
+	// 	bfs_custom_comm_stats[i].n_comms = 0;
+	// 	bfs_custom_comm_stats[i].comms_volume = 0;
+	// }
 	for (size_t i = 0; i < NUM_BFS_ROOTS; i++) {
 		bfs_custom_comm_timer[i] = 0.0;
 	}
-
-	MPI_SECTION_DEF(node_names, "Processed node names")
-	char host_name[MPI_MAX_PROCESSOR_NAME];
-	int namelen;
-	MPI_Get_processor_name(host_name,&namelen);
-	MPI_ALL_PRINT(fprintf(fp, "%s\n", host_name);)
-	MPI_SECTION_END(node_names)
+	if (my_pe() == 0) {
+		void* flag_val;
+		int flag;
+		MPI_Comm_get_attr(MPI_COMM_WORLD, MPI_WTIME_IS_GLOBAL, &flag_val, &flag);
+		if (flag && *(int*)flag_val) {
+			printf("MPI Clocks are synchronized\n");
+		} else {
+			printf("MPI Clocks are NOT synchronized\n");
+		}
+	}
+	
 
 	/* Parse arguments. */
 	int SCALE = 16;
@@ -670,33 +675,26 @@ int main(int argc, char** argv) {
 		}
 		fprintf(fp, "\n");
 	)
+	MPI_PRINT_ONCE(
+		printf("Observed clock offsets (relative to rank 0): ");
+		for (int i = 0; i < size; i++) {
+			printf("%.9f ", clock_offsets[i]);
+		}
+		printf("\n");
+	)
 	MPI_ALL_PRINT_NAMED(packet_bandwidth,
 		for (int run = 0; run < NUM_BFS_ROOTS; run++) {
-			uint32_t i = run*MAX_CUSTOM_PACKET_STATS_PER_RUN;
+			uint32_t i = run * MAX_CUSTOM_PACKET_STATS_PER_RUN;
 			while (bfs_custom_packet_stats[i].comm_time != 0.0) {
-				fprintf(fp, "(%d,%d,%.6f) ", 
-					bfs_custom_packet_stats[i].source, 
-					bfs_custom_packet_stats[i].destination, 
+				fprintf(fp, "%d,%lu,%.9f ", 
+					bfs_custom_packet_stats[i].source,
+					bfs_custom_packet_stats[i].buffer_size, 
 					bfs_custom_packet_stats[i].comm_time);
 				++i;
 			}
 			fprintf(fp, "\n");
 		}
 	)
-	
-	// TODO single packet bw
-	// MPI_ALL_PRINT_NAMED(packet_stats,
-	// 	for (int run = 0; run < NUM_BFS_ROOTS; run++) {
-	// 		for (int peer = 0; peer < size; peer++) {
-	// 			if (peer == rank) continue;
-
-	// 			int idx = run * size * (size - 1) + rank * (size - 1) + (peer < rank ? peer : peer - 1);
-	// 			CustomCommStats *stats = &bfs_custom_comm_stats[idx];
-
-	// 			fprintf(fp, "[METRIC] rank=%d run=%d dest=%d n_comms=%d volume=%zu\n", rank, run, peer, stats->n_comms, stats->comms_volume);
-	// 		}
-	// 	}
-	// )
 	MPI_SECTION_END(detailed_results)
 	fflush(stdout);
 	MPI_Barrier(MPI_COMM_WORLD);
@@ -710,8 +708,9 @@ int main(int argc, char** argv) {
 #endif
 
 	// Custom
-	free(bfs_custom_comm_stats);
+	// free(bfs_custom_comm_stats);
 	free(bfs_custom_comm_timer);
+	free(clock_offsets);
 
 	cleanup_globals();
 	aml_finalize(); //includes MPI_Finalize()

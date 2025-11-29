@@ -27,12 +27,12 @@ extern MPI_Datatype packed_edge_mpi_type; /* MPI datatype for packed_edge struct
 
 static const int ulong_bits = sizeof(unsigned long) * CHAR_BIT;
 
-typedef struct CustomCommStats {
-	uint32_t n_comms;
-	uint64_t comms_volume;
-	// double comm_time;
-} CustomCommStats;
-#define CUSTOM_COMM_STATS_IDX(rankFrom, rankTo) ((run_number * size * (size-1)) + (rankFrom * (size-1)) + rankTo)
+// typedef struct CustomCommStats {
+// 	uint32_t n_comms;
+// 	uint64_t comms_volume;
+// 	// double comm_time;
+// } CustomCommStats;
+// #define CUSTOM_COMM_STATS_IDX(rankFrom, rankTo) ((run_number * size * (size-1)) + (rankFrom * (size-1)) + rankTo)
 
 #define MAX_CUSTOM_PACKET_STATS_PER_RUN 1000
 // If comm_time==0 the struct data is considered uninitialized
@@ -40,6 +40,7 @@ typedef struct CustomPacketStats {
 	uint32_t source;
 	uint32_t destination;
 	double   comm_time;
+	uint64_t buffer_size;
 } CustomPacketStats;
 
 /* Distribute edges by their endpoints (make two directed copies of each input

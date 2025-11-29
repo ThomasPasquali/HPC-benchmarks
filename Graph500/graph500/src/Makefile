@@ -2,7 +2,8 @@ CFLAGS = -Drestrict=__restrict__ -O3 -DGRAPH_GENERATOR_MPI -DREUSE_CSR_FOR_VALID
 LDFLAGS = -lpthread
 MPICC = mpicc
 PREPROCESSOR_FLAGS ?=
-PREPROCESSOR_FLAGS += -DCCUTILS_ENABLE_MPI -DCCUTILS_NO_JSON -DDEBUGSTATS
+# -DDEBUGSTATS -DFORCE_INTERNODE_ONLY -DAGGR_intra=524288 -DAGGR=524288
+PREPROCESSOR_FLAGS += -DCCUTILS_ENABLE_MPI -DCCUTILS_NO_JSON
 
 all: graph500_reference_bfs_sssp graph500_reference_bfs 
 #graph500_custom_bfs graph500_custom_bfs_sssp
@@ -32,4 +33,6 @@ graph500_custom_bfs_sssp: bfs_custom.c sssp_custom.c $(SOURCES) $(HEADERS) $(GEN
 
 clean:
 	-rm -f graph500_*
+
+deep_clean: clean
 	-rm -rf ../ccutils/install ../ccutils/build;
