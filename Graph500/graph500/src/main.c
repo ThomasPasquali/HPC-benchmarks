@@ -33,7 +33,7 @@
 #include <unistd.h>
 #include <ccutils/mpi/mpi_macros.h>
 
-#define NUM_BFS_ROOTS 2
+#define NUM_BFS_ROOTS 64
 int run_number = 0;
 
 /****** CUSTOM STATS ******/

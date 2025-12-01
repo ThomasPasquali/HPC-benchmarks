@@ -3,6 +3,8 @@ Leonardo Supercomputer Nodelist Generator
 Generates optimized nodelists for SLURM job scheduling based on network topology constraints
 """
 
+import os
+from pathlib import Path
 import pandas as pd
 import re
 import numpy as np
@@ -43,7 +45,7 @@ class SlurmResources:
             raise ValueError("num_nodes must be positive")
 
 
-def load_leonardo_system_data(csv_path: str) -> pd.DataFrame:
+def load_leonardo_system_data(csv_path: Union[str,Path]) -> pd.DataFrame:
         """
         Load Leonardo system data from CSV or create sample data.
         
@@ -102,7 +104,8 @@ class LeonardoNodelistGenerator:
         elif csv_path:
             self.df = load_leonardo_system_data(csv_path)
         else:
-            raise Exception('Must provide either system_df or csv_path')
+            map_file = Path(os.path.dirname(os.path.abspath(__file__))) / 'leo_map.txt'
+            self.df = load_leonardo_system_data(map_file)
         
         self._validate_dataframe()
         
@@ -898,6 +901,53 @@ class LeonardoNodelistGenerator:
         }
         
         return score, details
+    
+    def get_node_distance(self, node1: int, node2: int) -> int:
+        """
+        Calculate the network distance between two nodes.
+        
+        Distance levels:
+        - 0: Same node
+        - 1: Different nodes, same L1 switch
+        - 2: Different L1 switches, same L2 switch (same cell)
+        - 3: Different L2 switches (different cells)
+        
+        Args:
+            node1: First node ID
+            node2: Second node ID
+            
+        Returns:
+            Distance level (0-3)
+            
+        Raises:
+            ValueError: If either node ID is not found in the topology
+        """
+        # Check if nodes exist
+        if node1 not in self.node_to_cell:
+            raise ValueError(f"Node {node1} not found in topology")
+        if node2 not in self.node_to_cell:
+            raise ValueError(f"Node {node2} not found in topology")
+        
+        # Same node
+        if node1 == node2:
+            return 0
+        
+        # Get topology information for both nodes
+        switch1 = self.node_to_switch[node1]
+        switch2 = self.node_to_switch[node2]
+        cell1 = self.node_to_cell[node1]
+        cell2 = self.node_to_cell[node2]
+        
+        # Same L1 switch (different nodes on same switch)
+        if switch1 == switch2:
+            return 1
+        
+        # Same L2 switch / same cell (different L1 switches, same cell)
+        if cell1 == cell2:
+            return 2
+        
+        # Different L2 switches (different cells)
+        return 3
 
 def parse_topology_file(path: str) -> pd.DataFrame:
     pattern = re.compile(
