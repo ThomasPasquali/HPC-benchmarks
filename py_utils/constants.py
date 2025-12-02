@@ -40,6 +40,7 @@ CLUSTER_NAMES_MAP = {
   'nanjing': 'NJ',
   'haicgu': 'HAICGU',
   'leonardo': 'LEO',
+  'local': 'local',
 }
 
 PARTITION_NAMES_MAP = {
@@ -47,7 +48,10 @@ PARTITION_NAMES_MAP = {
   'eth': 'eth',
   'NSLB': 'nslb',
   'plain': 'default',
-  'booster': 'booster',
+  'boost_usr_prod': 'booster',
+  # Debug
+  'test': 'test',
+  'other': 'other',
 }
 
 # Plots style

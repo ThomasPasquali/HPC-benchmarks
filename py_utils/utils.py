@@ -99,6 +99,39 @@ def create_linestyle_map(values):
 
 def create_color_map(values):
   return {v: color for v, color in zip(values, itertools.cycle(COLORS_LIST))}
-  
+
 def create_marker_map(values):
   return {v: color for v, color in zip(values, itertools.cycle(MARKERS_LIST))}
+
+def format_bytes(size_bytes, binary=False, precision=2):
+  """
+  Convert a size in bytes into a human-readable string.
+
+  Args:
+      size_bytes (int or float): Size in bytes
+      binary (bool): If True, use binary units (KiB, MiB, GiB).
+                      If False, use SI units (KB, MB, GB)
+      precision (int): Number of decimal places
+
+  Returns:
+      str: Human-readable string
+  """
+  if size_bytes < 0:
+    raise ValueError("size_bytes must be non-negative")
+
+  if binary:
+    # Binary prefixes: 1024
+    units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"]
+    factor = 1024.0
+  else:
+    # SI prefixes: 1000
+    units = ["B", "KB", "MB", "GB", "TB", "PB"]
+    factor = 1000.0
+
+  size = float(size_bytes)
+  for unit in units:
+    if size < factor:
+      return f"{size:.{precision}f} {unit}"
+    size /= factor
+
+  return f"{size:.{precision}f} {units[-1]}"
