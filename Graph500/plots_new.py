@@ -7,8 +7,19 @@ import matplotlib.pyplot as plt
 import argparse
 
 sys.path.append(str(Path(__file__).parent.parent))
+from py_utils.constants import *
 from py_utils.utils import create_color_map, create_marker_map, format_bytes
 import py_utils.import_export as import_export
+
+FONT_AXES = 20
+FONT_TICKS = 14
+FONT_LEGEND = 14
+
+plt.rc('axes', titlesize=FONT_AXES)     # fontsize of the axes title
+plt.rc('axes', labelsize=FONT_AXES)     # fontsize of the x and y labels
+plt.rc('xtick', labelsize=FONT_TICKS)   # fontsize of the tick labels
+plt.rc('ytick', labelsize=FONT_TICKS)   # fontsize of the tick labels
+plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
 
 # ---------------------------
 # SCATTERPLOT
@@ -47,11 +58,11 @@ def plot_scatter(df: pd.DataFrame, title: str, outfile: Path):
 
     plt.xlabel("Packet Size [KiB]")
     plt.ylabel("Time [µs]")
-    plt.title(title)
+    plt.title(title, fontsize=12)
     plt.legend(
         loc="center left",
         bbox_to_anchor=(1, 0.5),
-        fontsize=6,
+        fontsize=7,
         ncols=1,
         frameon=True,
     )
@@ -109,7 +120,7 @@ def plot_binned_boxplots(df: pd.DataFrame, title: str, outfile: Path, bins=6):
         ticks=[i for i in range(len(bin_list))],
         labels=[f'[{format_bytes(max(b.left, 0), precision=1, binary=True)}, {format_bytes(b.right, precision=1, binary=True)}]' for b in bin_list],
         rotation=40,
-        fontsize=10,
+        # fontsize=10,
     )
 
     # Legend
@@ -121,13 +132,13 @@ def plot_binned_boxplots(df: pd.DataFrame, title: str, outfile: Path, bins=6):
         loc='best',
         # loc="upper left",
         # bbox_to_anchor=(1.02, 1.0),
-        fontsize=6,
+        # fontsize=6,
         frameon=True,
     )
 
     plt.ylabel("Time [$\\mu$s]")
     plt.xlabel("Message Size")
-    plt.title(title)
+    plt.title(title, fontsize=12)
     plt.grid(True)
     plt.tight_layout()
     plt.savefig(outfile, bbox_inches="tight")
@@ -141,7 +152,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("parquet_files", type=Path, nargs='+')
     parser.add_argument("--bins", type=int, default=8)
-    parser.add_argument("--time_quantiles", type=float, default=[1.0, 0.3], nargs='+')
+    parser.add_argument("--time_quantiles", type=float, default=[1.0, 0.25, 0.3], nargs='+')
     parser.add_argument("--outdir", type=Path, default=Path("plots"))
 
     args = parser.parse_args()
@@ -151,26 +162,30 @@ def main():
 
     for meta, df in data:
         for q in args.time_quantiles:
-            info = [f'{k}:{meta[k]}' for k in ['cluster', 'partition', 'nodes', 'buffer_size', 'scale', 'edgefactor']] + [f'quantile:{q}']
-            base = '-'.join(info)
-            title = ' - '.join(info)
-            qval = df['time'].quantile(q)
-            df = df[df['time'] <= qval]
+            for leq_geq in (['leq', 'geq'] if q <= 0.95 else ['leq']):
+                info = [f'{k}:{meta[k]}' for k in ['cluster', 'partition', 'nodes', 'buffer_size', 'scale', 'edgefactor']] + [f'quantile:{leq_geq}{int(q*100)}']
+                base = '-'.join(info)
+                title = ' - '.join(info)
+                qval = df['time'].quantile(q)
+                if leq_geq == 'leq':
+                    df_filtered = df[df['time'] <= qval]
+                else:
+                    df_filtered = df[df['time'] >= qval]
 
-            # Scatter plot
-            plot_scatter(
-                df,
-                title=title,
-                outfile=args.outdir / f"{base}_scatter.png",
-            )
+                # Scatter plot
+                plot_scatter(
+                    df_filtered,
+                    title=title,
+                    outfile=args.outdir / f"{base}_scatter.png",
+                )
 
-            # Boxplots
-            plot_binned_boxplots(
-                df,
-                title=title,
-                outfile=args.outdir / f"{base}_boxplot.png",
-                bins=args.bins,
-            )
+                # Boxplots
+                plot_binned_boxplots(
+                    df_filtered,
+                    title=title,
+                    outfile=args.outdir / f"{base}_boxplot.png",
+                    bins=args.bins,
+                )
 
     print(f'Plots saved to "{Path(args.outdir).resolve().absolute()}"')
 

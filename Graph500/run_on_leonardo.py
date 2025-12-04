@@ -199,7 +199,7 @@ def main():
     args = parser.parse_args()
 
     # FIXME just for testing
-    nnodes = 4
+    nnodes = 8
     NODES = [nnodes]
 
     config_nodelist_map = None
@@ -207,7 +207,7 @@ def main():
         config_nodelist_map = get_nodelists_emulating_nanjing(NODES)
     elif args.nodelist_type == NODELIST_TYPE_DIFFERENT_DISTANCES:
         while config_nodelist_map is None or config_nodelist_map.get(gen_config_name(nnodes)) is None or len(config_nodelist_map.get(gen_config_name(nnodes))) <= 0:
-            time.sleep(2)
+            time.sleep(5)
             print(f'Trying to find a {nnodes}-nodes list...')
             config_nodelist_map = get_nodelists_different_distances([nnodes])
 
@@ -238,10 +238,10 @@ def main():
                     "gcc/12.2.0",
                     "openmpi/4.1.6--gcc--12.2.0-cuda-12.2"
                 ],
-                custom_headers=[
-                    "#SBATCH --mail-type=END",
-                    "#SBATCH --mail-user=thomas.pasquali@unitn.it"
-                ],
+                # custom_headers=[
+                #     "#SBATCH --mail-type=END",
+                #     "#SBATCH --mail-user=thomas.pasquali@unitn.it"
+                # ],
                 overwrite=True,
             )
 

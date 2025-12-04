@@ -33,7 +33,7 @@ static const int ulong_bits = sizeof(unsigned long) * CHAR_BIT;
 // 	// double comm_time;
 // } CustomCommStats;
 // #define CUSTOM_COMM_STATS_IDX(rankFrom, rankTo) ((run_number * size * (size-1)) + (rankFrom * (size-1)) + rankTo)
-
+#define CCUTILS_NO_JSON
 #define MAX_CUSTOM_PACKET_STATS_PER_RUN 1000
 // If comm_time==0 the struct data is considered uninitialized
 typedef struct CustomPacketStats {

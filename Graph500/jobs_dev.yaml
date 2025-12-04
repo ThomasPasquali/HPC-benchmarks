@@ -1,7 +1,7 @@
 sequential: true
 
 variables:
-  nodes: [4]
+  nodes: [8]
   partition: ["boost_usr_prod"]
   bin: ["graph500_bfs_2MiB"] # ["graph500_bfs_32KiB", "graph500_bfs_512KiB", "graph500_bfs_2MiB"]
   scale: [22]
