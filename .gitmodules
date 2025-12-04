@@ -1,9 +1,9 @@
 [submodule "PointerChasing/pointer-chasing"]
 	path = PointerChasing/pointer-chasing
 	url = https://github.com/afborchert/pointer-chasing.git
-[submodule "DNNProxy/DNN-cpp-proxies"]
-	path = DNNProxy/DNN-cpp-proxies
-	url = https://github.com/HicrestLaboratory/DNN-cpp-proxies.git
+[submodule "DNNProxy/DNNProxy"]
+	path = DNNProxy/DNNProxy
+	url = https://github.com/HicrestLaboratory/DNNProxy.git
 [submodule "STREAM/STREAM"]
 	path = STREAM/STREAM
 	url = https://github.com/jeffhammond/STREAM.git
