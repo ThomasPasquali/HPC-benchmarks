@@ -32,8 +32,10 @@
 #include <inttypes.h>
 #include <unistd.h>
 #include <ccutils/mpi/mpi_macros.h>
+#ifdef VERBOSE_PRINTS
+#include <ccutils/colors.h>
+#endif
 
-#define NUM_BFS_ROOTS 64
 int run_number = 0;
 
 /****** CUSTOM STATS ******/
@@ -42,10 +44,12 @@ int run_number = 0;
 // CustomCommStats* bfs_custom_comm_stats;
 CustomPacketStats* bfs_custom_packet_stats;
 uint32_t bfs_custom_packet_stats_i;
+uint32_t bfs_custom_packet_stats_run_partial_i;
 double *bfs_custom_comm_timer;
 double *clock_offsets;
 
 extern int size;
+extern int rank;
 
 /****** END CUSTOM STATS ******/
 
@@ -389,15 +393,27 @@ int main(int argc, char** argv) {
 
 	int bfs_root_idx,i;
 	if (!getenv("SKIP_BFS")) {
+		#ifdef VERBOSE_PRINTS
+			if (rank == 0) fprintf(stderr, RED "Warmup BFS\n" RESE);
+			FLUSH_WAIT(500000)
+			MPI_Barrier(MPI_COMM_WORLD);
+		#endif
 		clean_pred(&pred[0]); //user-provided function from bfs_implementation.c
+		bfs_custom_packet_stats_i = 0;
+		bfs_custom_packet_stats_run_partial_i = 0;
 		run_bfs(bfs_roots[0], &pred[0]); //warm-up
+		// validate_result(1, &tg, nlocalverts, bfs_roots[0], pred, shortest,NULL);
+		// exit(0);
+
 #ifdef ENERGYLOOP_BFS
                 int eloop;
                 if(!my_pe()) printf("starting energy loop BFS\n");
                 for(eloop=0;eloop<1000000;eloop++)
-                        for (bfs_root_idx = 0; bfs_root_idx < NUM_BFS_ROOTS; ++bfs_root_idx) {
-                clean_pred(&pred[0]);
-                run_bfs(bfs_roots[bfs_root_idx], &pred[0]);
+					for (bfs_root_idx = 0; bfs_root_idx < NUM_BFS_ROOTS; ++bfs_root_idx) {
+						bfs_custom_packet_stats_i = 0;
+						bfs_custom_packet_stats_run_partial_i = 0;
+						clean_pred(&pred[0]);
+						run_bfs(bfs_roots[bfs_root_idx], &pred[0]);
                 }
                 if(!my_pe()) printf("finished energy loop BFS\n");
 #endif
@@ -411,16 +427,20 @@ int main(int argc, char** argv) {
 			run_number = bfs_root_idx;
 
 			#ifdef VERBOSE_PRINTS
-				if (rank == 0) fprintf(stderr, "Running BFS %d\n", bfs_root_idx);
+				if (rank == 0) fprintf(stderr, RED "Running BFS #%d\n" RESET, bfs_root_idx);
+				FLUSH_WAIT(500000)
+				MPI_Barrier(MPI_COMM_WORLD);
 			#endif
 
 			clean_pred(&pred[0]); //user-provided function from bfs_implementation.c
 			bfs_custom_packet_stats_i = bfs_root_idx * MAX_CUSTOM_PACKET_STATS_PER_RUN;
+			bfs_custom_packet_stats_run_partial_i = 0;
 			/* Do the actual BFS. */
 			double bfs_start = MPI_Wtime();
 			run_bfs(root, &pred[0]);
 			double bfs_stop = MPI_Wtime();
 			bfs_times[bfs_root_idx] = bfs_stop - bfs_start;
+			
 			#ifdef VERBOSE_PRINTS
 				if (rank == 0) fprintf(stderr, "Time for BFS %d is %f\n", bfs_root_idx, bfs_times[bfs_root_idx]);
 			#endif
@@ -438,12 +458,14 @@ int main(int argc, char** argv) {
 			#ifdef VERBOSE_PRINTS
 				if (rank == 0) fprintf(stderr, "Cut edges: %.1d\n", edge_cut_visit_count);
 				if (rank == 0) fprintf(stderr, "Cut TEPS in BFS %d is %g\n", bfs_root_idx, edge_cut_visit_count / bfs_times[bfs_root_idx]);
+				FLUSH_WAIT(500000)
+				MPI_Barrier(MPI_COMM_WORLD);
 			#endif
 			
 
 			/* Validate result. */
 			if (!getenv("SKIP_VALIDATION")) {
-				// if (rank == 0) fprintf(stderr, "Validating BFS %d\n", bfs_root_idx);
+				if (rank == 0) fprintf(stderr, "Validating BFS %d\n", bfs_root_idx);
 
 				double validate_start = MPI_Wtime();
 				int validation_passed_one = validate_result(1,&tg, nlocalverts, root, pred,shortest,&edge_visit_count);

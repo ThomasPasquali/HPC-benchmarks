@@ -21,6 +21,10 @@
 #include <pthread.h>
 #include <ccutils/mpi/mpi_macros.h>
 
+#ifdef VERBOSE_PRINTS
+#include <assert.h>
+#endif
+
 #ifdef __APPLE__
 #define SYSCTL_CORE_COUNT   "machdep.cpu.core_count"
 #include <sys/sysctl.h>
@@ -102,9 +106,10 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpu_size,
 #define SOATTR __attribute__((visibility("default")))
 
 // Custom timestamp at the beginning of each per-node buffer
-#define TIMESTAMP_SIZE sizeof(double)
+// sizeof(double) !!! this may cause cast issues
+#define TIMESTAMP_SIZE 8
 #define SENDSOURCE(node) (sendbuf + (AGGR + TIMESTAMP_SIZE) * nbuf[node] + TIMESTAMP_SIZE)
-#define SENDSOURCE_intra(node) ( sendbuf_intra+(AGGR_intra*nbuf_intra[node]) )
+#define SENDSOURCE_intra(node) (sendbuf_intra+ ((AGGR_intra + TIMESTAMP_SIZE)*nbuf_intra[node]) + TIMESTAMP_SIZE)
 
 #define ushort unsigned short
 static int myproc,num_procs;
@@ -129,6 +134,7 @@ static void (*aml_handlers[256]) (int,void *,int); //pointers to user-provided A
 // extern CustomCommStats *bfs_custom_comm_stats;
 extern CustomPacketStats* bfs_custom_packet_stats;
 extern uint32_t bfs_custom_packet_stats_i;
+extern uint32_t bfs_custom_packet_stats_run_partial_i;
 extern int run_number;
 extern double *clock_offsets;
 
@@ -224,14 +230,43 @@ static void process(int fromgroup,int length ,char* message) {
 	// Extract timestamp from the buffer beginning
 	double send_timestamp;
 	memcpy(&send_timestamp, message, sizeof(double));
+
 	// Record bandwidth measurement
-	if (MAX_CUSTOM_PACKET_STATS_PER_RUN - (bfs_custom_packet_stats_i%MAX_CUSTOM_PACKET_STATS_PER_RUN) > 0) {
+	int full = (((int)AGGR) - length) <= (int)10; // This accounts for the timestamp in the buffers (8B)
+	uint32_t next_run_stats_begin = (run_number+1) * MAX_CUSTOM_PACKET_STATS_PER_RUN;
+	#ifdef VERBOSE_PRINTS
+		// fprintf(stderr, "-- run: %d full_i=%d, partial_i=%d of %d -- size diff %d-%d=%d (full %d) register: %d idx: %d\n",
+		// 	run_number,
+		// 	bfs_custom_packet_stats_i,
+		// 	bfs_custom_packet_stats_run_partial_i,
+		// 	64*MAX_CUSTOM_PACKET_STATS_PER_RUN,
+		// 	AGGR,
+		// 	length,
+		// 	AGGR - length,
+		// 	full,
+		// 	!full || (bfs_custom_packet_stats_i < next_run_stats_begin-num_procs),
+		// 	full ? bfs_custom_packet_stats_i : next_run_stats_begin-(bfs_custom_packet_stats_run_partial_i+1)
+		// );
+		if (!full) fprintf(stderr, "size diff: %d-%d-%d=%d  full: %s  --- run: %d full_i=%d, partial_i=%d\n",
+			AGGR, sizeof(double),length, AGGR - sizeof(double) - length, full?"Y":"N",
+			run_number, bfs_custom_packet_stats_i, bfs_custom_packet_stats_run_partial_i);
+		if (!full) fprintf(stderr, "Partially filled packet from %d to %d\n", fromgroup, myproc);
+
+		assert(bfs_custom_packet_stats_run_partial_i <= (num_procs*ESTIMATED_MAX_RUN_FRONTIERS));
+	#endif
+	// Last n cells in the run slice are reserved for partially filled buffers
+	if ((!full && bfs_custom_packet_stats_run_partial_i <= (num_procs * ESTIMATED_MAX_RUN_FRONTIERS)) || (full && bfs_custom_packet_stats_i < next_run_stats_begin - (num_procs * ESTIMATED_MAX_RUN_FRONTIERS))) {
+		uint32_t stats_idx = bfs_custom_packet_stats_i;
+		if (full) {
+			bfs_custom_packet_stats_i++;
+		} else {
+			stats_idx = next_run_stats_begin-(++bfs_custom_packet_stats_run_partial_i);
+		}
 		double adjusted_recv_time = MPI_Wtime() - clock_offsets[myproc];
-		bfs_custom_packet_stats[bfs_custom_packet_stats_i].comm_time = adjusted_recv_time - send_timestamp;
-		bfs_custom_packet_stats[bfs_custom_packet_stats_i].source = PROC_FROM_GROUPLOCAL(fromgroup,mylocal);
-		bfs_custom_packet_stats[bfs_custom_packet_stats_i].destination = myproc;
-		bfs_custom_packet_stats[bfs_custom_packet_stats_i].buffer_size = length - TIMESTAMP_SIZE;
-		bfs_custom_packet_stats_i++;
+		bfs_custom_packet_stats[stats_idx].comm_time = adjusted_recv_time - send_timestamp;
+		bfs_custom_packet_stats[stats_idx].source = PROC_FROM_GROUPLOCAL(fromgroup,mylocal);
+		bfs_custom_packet_stats[stats_idx].destination = myproc;
+		bfs_custom_packet_stats[stats_idx].buffer_size = length - TIMESTAMP_SIZE;
 	}
 
 	int i = TIMESTAMP_SIZE;
@@ -259,7 +294,7 @@ struct __attribute__((__packed__)) hdri { //header of internode message
 
 //process intranode messages
 static void process_intra(int fromlocal,int length ,char* message) {
-	int i=0;
+	int i = TIMESTAMP_SIZE;
 	while ( i < length ) {
 		void*m = message+i;
 		struct hdri *h = m;
@@ -391,8 +426,9 @@ SOATTR void aml_send(void *src, int type,int length, int node ) {
 		return aml_send_intra(src,type,length,local,myproc);
 
 	//send to another group
-	int nmax = AGGR - sendsize[group]-sizeof(struct hdr);
+	int nmax = AGGR - (sendsize[group] + sizeof(struct hdr));
 	if ( nmax < length ) {
+		// printf("flushing with %d-%d=%d len %d\n", AGGR, sendsize[group] + sizeof(struct hdr), nmax, length);
 		flush_buffer(group);
 	}
 	char* dst = (SENDSOURCE(group)+sendsize[group]);

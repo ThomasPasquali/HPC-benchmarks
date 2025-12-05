@@ -27,6 +27,13 @@ extern MPI_Datatype packed_edge_mpi_type; /* MPI datatype for packed_edge struct
 
 static const int ulong_bits = sizeof(unsigned long) * CHAR_BIT;
 
+#define NUM_BFS_ROOTS 64
+// FIXME handle really large scale experiments (where 1000 is not enough)
+// FIXME also, consider that ESTIMATED_MAX_RUN_FRONTIERS grows with the number of nodes
+#define MAX_CUSTOM_PACKET_STATS_PER_RUN 1000
+// This may be small but doesn't really matter
+#define ESTIMATED_MAX_RUN_FRONTIERS 25
+
 // typedef struct CustomCommStats {
 // 	uint32_t n_comms;
 // 	uint64_t comms_volume;
@@ -34,7 +41,6 @@ static const int ulong_bits = sizeof(unsigned long) * CHAR_BIT;
 // } CustomCommStats;
 // #define CUSTOM_COMM_STATS_IDX(rankFrom, rankTo) ((run_number * size * (size-1)) + (rankFrom * (size-1)) + rankTo)
 #define CCUTILS_NO_JSON
-#define MAX_CUSTOM_PACKET_STATS_PER_RUN 1000
 // If comm_time==0 the struct data is considered uninitialized
 typedef struct CustomPacketStats {
 	uint32_t source;

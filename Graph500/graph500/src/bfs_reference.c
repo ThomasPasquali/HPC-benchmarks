@@ -113,9 +113,17 @@ void run_bfs(int64_t root, int64_t* pred) {
 			for(j=rowstarts[q1[i]];j<rowstarts[q1[i]+1];j++)
 				send_visit(COLUMN(j),q1[i]);
 
+		#ifdef VERBOSE_PRINTS
+			fprintf(stderr, GREEN "Process %d at level barrier...\n" RESET, my_pe());
+		#endif
 		double custom_start_time = MPI_Wtime();
 		aml_barrier();
 		bfs_custom_comm_timer[run_number] += MPI_Wtime() - custom_start_time;
+
+		#ifdef VERBOSE_PRINTS
+			FLUSH_WAIT(500000)
+			MPI_Barrier(MPI_COMM_WORLD);
+		#endif
 
 		qc=q2c;int *tmp=q1;q1=q2;q2=tmp;
 		sum=qc;
