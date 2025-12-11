@@ -63,6 +63,22 @@ using std::endl;
 #include <stdio.h>
 #include <string>
 
+#include <ccutils/timers.h> 
+#include <ccutils/mpi/mpi_timers.h>
+#include <ccutils/mpi/mpi_macros.h>
+
+//TODO: transform this into macros in ccutils
+bool collect_info = false;
+extern std::vector<float> __timer_vals_cg_times;
+extern std::vector<float> __timer_vals_dotp_allreduce_times;
+extern std::vector<float> __timer_vals_dotp_times;
+extern std::vector<float> __timer_vals_halo_times;
+extern std::vector<float> __timer_vals_spmv_times;
+extern std::vector<float> __timer_vals_mg_times;
+extern std::vector<float> __timer_vals_waxpby_times;
+extern std::vector<std::string> halo_kernel_call;
+extern std::vector<std::vector<size_t>> halo_msg_size;
+
 #ifdef HPCG_METRICS
   #define PRINT_SEP(title) if (rank == 0) { HPCG_fout << "==== " << title << " ====\n"; }
 #else
@@ -317,7 +333,7 @@ int main(int argc, char * argv[]) {
   for (int i=0; i< numberOfCalls; ++i) {
     ZeroVector(x); // start x at all zeros
     double last_cummulative_time = opt_times[0];
-    ierr = CG( A, data, b, x, optMaxIters, refTolerance, niters, normr, normr0, &opt_times[0], true);
+    ierr = CG( A, data, b, x, optMaxIters, refTolerance, niters, normr, normr0, &opt_times[0], true, i);
     if (ierr) ++err_count; // count the number of errors in CG
     // Convergence check accepts an error of no more than 6 significant digits of relTolerance
     if (normr / normr0 > refTolerance * (1.0 + 1.0e-6)) ++tolerance_failures; // the number of failures to reduce residual
@@ -370,6 +386,7 @@ int main(int argc, char * argv[]) {
   testnorms_data.values = new double[numberOfCgSets];
 
   PRINT_SEP("Beginning of Main Runs Loop")
+  collect_info = true;
 
   #ifdef HPCG_METRICS
     std::string debugOutput;
@@ -394,14 +411,39 @@ int main(int argc, char * argv[]) {
     HPCG_fout << debugOutput << endl;
     MPI_Barrier(MPI_COMM_WORLD);
   #endif
+  
+
+  MPI_SECTION_DEF(cg, "CG Benchmark Runs");
 
   for (int i=0; i< numberOfCgSets; ++i) {
     PRINT_SEP("Start of Run " << i)
     ZeroVector(x); // Zero out x
-    ierr = CG( A, data, b, x, optMaxIters, optTolerance, niters, normr, normr0, &times[0], true);
+    ierr = CG( A, data, b, x, optMaxIters, optTolerance, niters, normr, normr0, &times[0], true, i);
     if (ierr) HPCG_fout << "Error in call to CG: " << ierr << ".\n" << endl;
     if (rank==0) HPCG_fout << "Call [" << i << "] Scaled Residual [" << normr/normr0 << "]" << endl;
     testnorms_data.values[i] = normr/normr0; // Record scaled residual from this run
+    std::string key_iter = std::to_string(i);
+    SECTION_JSON_SUB_PUT(cg, key_iter, "cg_times", __timer_vals_cg_times);
+    SECTION_JSON_SUB_PUT(cg, key_iter, "dotp_allreduce", __timer_vals_dotp_allreduce_times);
+    SECTION_JSON_SUB_PUT(cg, key_iter, "dotp", __timer_vals_dotp_times);
+    SECTION_JSON_SUB_PUT(cg, key_iter, "spmv", __timer_vals_spmv_times);
+    SECTION_JSON_SUB_PUT(cg, key_iter, "mg", __timer_vals_mg_times);
+    SECTION_JSON_SUB_PUT(cg, key_iter, "waxpby", __timer_vals_waxpby_times);
+    SECTION_JSON_SUB_PUT(cg, key_iter, "exchange_halo", __timer_vals_halo_times);
+    SECTION_JSON_SUB_PUT(cg, key_iter, "halo_kernels", halo_kernel_call);
+    SECTION_JSON_SUB_PUT(cg, key_iter, "halo_msg_sizes", halo_msg_size);
+
+    //clear vectors for next iteration
+    std::vector<std::string>().swap(halo_kernel_call);
+    std::vector<std::vector<size_t>>().swap(halo_msg_size);
+    __timer_vals_cg_times.clear();
+    __timer_vals_dotp_allreduce_times.clear();
+    __timer_vals_dotp_times.clear();
+    __timer_vals_spmv_times.clear();
+    __timer_vals_mg_times.clear();
+    __timer_vals_waxpby_times.clear();
+    __timer_vals_halo_times.clear();
+
     PRINT_SEP("End of Run " << i)
   }
 
@@ -418,6 +460,14 @@ int main(int argc, char * argv[]) {
   ierr = TestNorms(testnorms_data);
 
   PRINT_SEP("Reporting Results")
+  
+  MPI_GLOBAL_JSON_PUT(cg, "world_size", size);
+  MPI_GLOBAL_JSON_PUT(cg, "cg_sets", numberOfCgSets);
+  MPI_GLOBAL_JSON_PUT(cg, "grid_size_nx", params.nx);
+  MPI_GLOBAL_JSON_PUT(cg, "grid_size_ny", params.ny);
+  MPI_GLOBAL_JSON_PUT(cg, "grid_size_nz", params.nz);
+
+  MPI_SECTION_END(cg);
 
   ////////////////////
   // Report Results //

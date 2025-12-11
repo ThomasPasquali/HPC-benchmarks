@@ -29,14 +29,31 @@
 #include <string>
 #include <iostream>
 
+#include <ccutils/mpi/mpi_timers.h>
+#include <ccutils/mpi/mpi_macros.h>
+//TODO: add the ifdef CCUTILS_TIMERS around the MPI_TIMER_DEF
+MPI_TIMER_DEF(halo_times)
+std::vector<std::string> halo_kernel_call;
+std::vector<std::vector<size_t>> halo_msg_size;
+extern bool collect_info;
+extern bool preconditioning;
+
+#define MPI_TIMER_STOP_CONDITIONAL(timer) \
+  MPI_TIMER_STOP(timer)                   \
+  if(!collect_info)                        \
+    __timer_vals_##timer.pop_back();
+
+
 /*!
   Communicates data that is at the border of the part of the domain assigned to this processor.
 
   @param[in]    A The known system matrix
   @param[inout] x On entry: the local vector entries followed by entries to be communicated; on exit: the vector with non-local entries updated by other processors
  */
-void ExchangeHalo(const SparseMatrix & A, Vector & x) {
-
+void ExchangeHalo(const SparseMatrix & A, Vector & x, const char* kernel_name) {
+  #ifdef USE_CCUTILS_TIMERS
+    MPI_TIMER_START(halo_times)
+  #endif
   // Extract Matrix pieces
 
   local_int_t localNumberOfRows = A.localNumberOfRows;
@@ -89,24 +106,24 @@ void ExchangeHalo(const SparseMatrix & A, Vector & x) {
   // Send to each neighbor
   //
 
-  std::string dbg = "*Rank ";
-  dbg += std::to_string(rank);
-  dbg += "* send sizes: ";
+  // std::string dbg = "*Rank ";
+  // dbg += std::to_string(rank);
+  // dbg += "* send sizes: ";
 
   // TODO: Thread this loop
   for (int i = 0; i < num_neighbors; i++) {
     local_int_t n_send = sendLength[i];
     MPI_Send(sendBuffer, n_send, MPI_DOUBLE, neighbors[i], MPI_MY_TAG, MPI_COMM_WORLD);
     sendBuffer += n_send;
-    dbg += std::to_string(n_send);
-    dbg += " ";
+    // dbg += std::to_string(n_send);
+    // dbg += " ";
   }
 
   //
   // Complete the reads issued above
   //
 
-  std::cerr << dbg << std::endl;
+  // std::cerr << dbg << std::endl;
   
   MPI_Status status;
   // TODO: Thread this loop
@@ -117,6 +134,18 @@ void ExchangeHalo(const SparseMatrix & A, Vector & x) {
   }
 
   delete [] request;
+  #ifdef USE_CCUTILS_TIMERS
+    MPI_TIMER_STOP_CONDITIONAL(halo_times)
+    
+    if(collect_info) {
+      halo_kernel_call.push_back(preconditioning ? "preconditioning_" + std::string(kernel_name) : kernel_name);
+      std::vector<size_t> iter_msg_sizes(num_neighbors);
+      for(int i=0; i<num_neighbors; i++)
+        iter_msg_sizes[i] = static_cast<size_t>(sendLength[i]*sizeof(double)); // in bytes
+      
+      halo_msg_size.push_back(iter_msg_sizes);
+    }
+  #endif
 
   return;
 }

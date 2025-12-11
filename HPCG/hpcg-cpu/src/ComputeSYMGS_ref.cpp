@@ -56,7 +56,7 @@ int ComputeSYMGS_ref( const SparseMatrix & A, const Vector & r, Vector & x) {
   assert(x.localLength==A.localNumberOfColumns); // Make sure x contain space for halo values
 
 #ifndef HPCG_NO_MPI
-  ExchangeHalo(A,x);
+  ExchangeHalo(A,x, "SYMGS");
 #endif
 
   const local_int_t nrow = A.localNumberOfRows;

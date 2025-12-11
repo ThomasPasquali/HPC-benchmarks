@@ -28,6 +28,8 @@
 #include <omp.h>
 #endif
 #include <cassert>
+#include <vector>
+#include <string>
 
 #include "mytimer.hpp"
 #define TICK()  t0 = mytimer() //!< record current time in 't0'
@@ -54,8 +56,8 @@ int ComputeSPMV_ref( const SparseMatrix & A, Vector & x, Vector & y, double &hal
   assert(y.localLength>=A.localNumberOfRows);
 
 #ifndef HPCG_NO_MPI
-  double t0 = 0.0;
-  TICK(); ExchangeHalo(A,x); TOCK(halo_timer);
+  //double t0 = 0.0;
+  ExchangeHalo(A,x, "SPMV");
 #endif
   const double * const xv = x.values;
   double * const yv = y.values;

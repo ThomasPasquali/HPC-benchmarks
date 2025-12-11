@@ -16,5 +16,5 @@
 #define EXCHANGEHALO_HPP
 #include "SparseMatrix.hpp"
 #include "Vector.hpp"
-void ExchangeHalo(const SparseMatrix & A, Vector & x);
+void ExchangeHalo(const SparseMatrix & A, Vector & , const char* kernel_name);
 #endif // EXCHANGEHALO_HPP

@@ -28,6 +28,19 @@
 #include <cassert>
 #include "ComputeDotProduct_ref.hpp"
 
+#include <ccutils/mpi/mpi_timers.h>
+
+//TODO: add the ifdef CCUTILS_TIMERS around the MPI_TIMER_DEF
+
+MPI_TIMER_DEF(dotp_allreduce_times)
+
+extern bool collect_info;
+
+#define MPI_TIMER_STOP_CONDITIONAL(timer) \
+  MPI_TIMER_STOP(timer)                   \
+  if(!collect_info)                        \
+    __timer_vals_##timer.pop_back();
+    
 /*!
   Routine to compute the dot product of two vectors where:
 
@@ -65,12 +78,21 @@ int ComputeDotProduct_ref(const local_int_t n, const Vector & x, const Vector & 
 
 #ifndef HPCG_NO_MPI
   // Use MPI's reduce function to collect all partial sums
+  #ifdef USE_CCUTILS_TIMERS
+  MPI_TIMER_START(dotp_allreduce_times)
+  #else
   double t0 = mytimer();
+  #endif
   double global_result = 0.0;
   MPI_Allreduce(&local_result, &global_result, 1, MPI_DOUBLE, MPI_SUM,
       MPI_COMM_WORLD);
   result = global_result;
+
+  #ifdef USE_CCUTILS_TIMERS
+  MPI_TIMER_STOP_CONDITIONAL(dotp_allreduce_times)
+  #else
   time_allreduce += mytimer() - t0;
+  #endif
 #else
   time_allreduce += 0.0;
   result = local_result;
