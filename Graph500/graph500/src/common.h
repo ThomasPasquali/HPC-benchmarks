@@ -32,7 +32,7 @@ static const int ulong_bits = sizeof(unsigned long) * CHAR_BIT;
 // FIXME also, consider that ESTIMATED_MAX_RUN_FRONTIERS grows with the number of nodes
 #define MAX_CUSTOM_PACKET_STATS_PER_RUN 1000
 // This may be small but doesn't really matter
-#define ESTIMATED_MAX_RUN_FRONTIERS 25
+#define ESTIMATED_MAX_RUN_FRONTIERS 20
 
 // typedef struct CustomCommStats {
 // 	uint32_t n_comms;

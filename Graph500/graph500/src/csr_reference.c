@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <search.h>
-#include <ccutils/mpi/mpi_macros.h>
+#include <ccutils/mpi/mpi_macros.hpp>
 
 int64_t nverts_known = 0;
 int *degrees;
@@ -124,8 +124,8 @@ void convert_graph_to_oned_csr(const tuple_graph* const tg, oned_csr_graph* cons
 	aml_long_allmax(&maxlocaledges);
 	long averageedges = totaledges/num_pes();
 	double disbalance = (double)(maxlocaledges-minlocaledges)/(double)averageedges * 100.0;
-	MPI_SECTION_DEF(graph_stats, "Statistics on Generated Graph")
-	MPI_PRINTF_ONCE(
+	CCUTILS_MPI_SECTION_DEF(graph_stats, "Statistics on Generated Graph")
+	CCUTILS_MPI_PRINTF_ONCE(
 		"vertices:%ld\nedges:%ld\nisolated:%ld\nmaxdeg:%ld\nmaxlocaledges:%ld\nminlocaledges:%ld\navglocaledges:%ld\n(max-min)/avg*100: %3.2f\n",
 		g->nglobalverts,
 		totaledges,
@@ -136,7 +136,7 @@ void convert_graph_to_oned_csr(const tuple_graph* const tg, oned_csr_graph* cons
 		averageedges,
 		disbalance
 	);
-	MPI_SECTION_END(graph_stats)
+	CCUTILS_MPI_SECTION_END(graph_stats)
 
 	g->notisolated=g->nglobalverts-isolated;
 	

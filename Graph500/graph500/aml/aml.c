@@ -19,7 +19,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <pthread.h>
-#include <ccutils/mpi/mpi_macros.h>
+#include <ccutils/mpi/mpi_macros.hpp>
 
 #ifdef VERBOSE_PRINTS
 #include <assert.h>
@@ -463,9 +463,9 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 		sprintf(host_name + namelen, "_%d", myproc);
 		namelen = strlen(host_name);
 	#endif
-	MPI_SECTION_DEF(node_names, "Processed node names")
-	MPI_ALL_PRINT_NAMED(node_names, fprintf(fp, "%s\n", host_name);)
-	MPI_SECTION_END(node_names)
+	CCUTILS_MPI_SECTION_DEF(node_names, "Processed node names")
+	CCUTILS_MPI_ALL_PRINT_NAMED(node_names, fprintf(fp, "%s\n", host_name);)
+	CCUTILS_MPI_SECTION_END(node_names)
 
 	bytes = num_procs * sizeof(char[MPI_MAX_PROCESSOR_NAME]);
 	host_names = (char (*)[MPI_MAX_PROCESSOR_NAME]) malloc(bytes);
@@ -512,16 +512,16 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 	CPU_SET(mylocal,&cpuset); //FIXME ? would it work good enough on all architectures?
 	pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
 
-	MPI_SECTION_DEF(bfs_config, "BFS Communication and Local Configuration")
-	MPI_PRINTF_ONCE("multicore=true\nnum_groups=%d\ngroup_size=%d\n", num_groups, group_size);
-	MPI_PRINTF_ONCE("loggroup=%d\ngroupmask=%d\n", loggroup, groupmask);
-	MPI_PRINTF_ONCE("NRECV=%d\nNRECVi=%d\nNSEND=%d\nNSENDi=%d\nAGGR=%dK\nAGGRi=%dK\n",NRECV,NRECV_intra,NSEND,NSEND_intra,AGGR>>10,AGGR_intra>>10);
+	CCUTILS_MPI_SECTION_DEF(bfs_config, "BFS Communication and Local Configuration")
+	CCUTILS_MPI_PRINTF_ONCE("multicore=true\nnum_groups=%d\ngroup_size=%d\n", num_groups, group_size);
+	CCUTILS_MPI_PRINTF_ONCE("loggroup=%d\ngroupmask=%d\n", loggroup, groupmask);
+	CCUTILS_MPI_PRINTF_ONCE("NRECV=%d\nNRECVi=%d\nNSEND=%d\nNSENDi=%d\nAGGR=%dK\nAGGRi=%dK\n",NRECV,NRECV_intra,NSEND,NSEND_intra,AGGR>>10,AGGR_intra>>10);
 	#ifdef PROCS_PER_NODE_NOT_POWER_OF_TWO
-		MPI_PRINTF_ONCE("PROCS_PER_NODE_POWER_OF_TWO=false\n");
+		CCUTILS_MPI_PRINTF_ONCE("PROCS_PER_NODE_POWER_OF_TWO=false\n");
 	#else
-		MPI_PRINTF_ONCE("PROCS_PER_NODE_POWER_OF_TWO=true\n");
+		CCUTILS_MPI_PRINTF_ONCE("PROCS_PER_NODE_POWER_OF_TWO=true\n");
 	#endif
-	MPI_SECTION_END(bfs_config)
+	CCUTILS_MPI_SECTION_END(bfs_config)
 	if(num_groups>MAXGROUPS) { if(myproc==0) printf("AML:v1.0 reference:unsupported num_groups > MAXGROUPS=%d\n",MAXGROUPS); exit(-1); }
 	fflush(NULL);
 	//init preposted recvs: NRECV internode

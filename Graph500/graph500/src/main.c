@@ -31,7 +31,7 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <unistd.h>
-#include <ccutils/mpi/mpi_macros.h>
+#include <ccutils/mpi/mpi_macros.hpp>
 #ifdef VERBOSE_PRINTS
 #include <ccutils/colors.h>
 #endif
@@ -581,7 +581,7 @@ int main(int argc, char** argv) {
 
 	/* Print results. */
 	if (rank == 0) {
-		MPI_SECTION_DEF(general_results, "Graph500 Official Results")
+		CCUTILS_MPI_SECTION_DEF(general_results, "Graph500 Official Results")
 		if (!validation_passed) {
 			fprintf(stdout, "No results printed for invalid run.\n");
 		} else {
@@ -684,27 +684,27 @@ int main(int argc, char** argv) {
 			}
 #endif
 		}
-		MPI_SECTION_END(general_results)
+		CCUTILS_MPI_SECTION_END(general_results)
 	}
 	
 	// Custom stats
 	fflush(stdout);
 	MPI_Barrier(MPI_COMM_WORLD);
-	MPI_SECTION_DEF(detailed_results, "Detailed BFS Metrics")
-	MPI_ALL_PRINT_NAMED(barrier_times,
+	CCUTILS_MPI_SECTION_DEF(detailed_results, "Detailed BFS Metrics")
+	CCUTILS_MPI_ALL_PRINT_NAMED(barrier_times,
 		for (int run = 0; run < NUM_BFS_ROOTS; run++) {
 			fprintf(fp, "%.6f ", bfs_custom_comm_timer[run]);
 		}
 		fprintf(fp, "\n");
 	)
-	MPI_PRINT_ONCE(
+	CCUTILS_MPI_PRINT_ONCE(
 		printf("Observed clock offsets (relative to rank 0): ");
 		for (int i = 0; i < size; i++) {
 			printf("%.9f ", clock_offsets[i]);
 		}
 		printf("\n");
 	)
-	MPI_ALL_PRINT_NAMED(packet_bandwidth,
+	CCUTILS_MPI_ALL_PRINT_NAMED(packet_bandwidth,
 		for (int run = 0; run < NUM_BFS_ROOTS; run++) {
 			uint32_t i = run * MAX_CUSTOM_PACKET_STATS_PER_RUN;
 			while (bfs_custom_packet_stats[i].comm_time != 0.0) {
@@ -717,7 +717,7 @@ int main(int argc, char** argv) {
 			fprintf(fp, "\n");
 		}
 	)
-	MPI_SECTION_END(detailed_results)
+	CCUTILS_MPI_SECTION_END(detailed_results)
 	fflush(stdout);
 	MPI_Barrier(MPI_COMM_WORLD);
 
