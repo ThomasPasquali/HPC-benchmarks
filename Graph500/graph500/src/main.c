@@ -394,8 +394,8 @@ int main(int argc, char** argv) {
 	int bfs_root_idx,i;
 	if (!getenv("SKIP_BFS")) {
 		#ifdef VERBOSE_PRINTS
-			if (rank == 0) fprintf(stderr, RED "Warmup BFS\n" RESE);
-			FLUSH_WAIT(500000)
+			if (rank == 0) fprintf(stderr, RED "Warmup BFS\n" RESET);
+			CCUTILS_FLUSH_WAIT(500000)
 			MPI_Barrier(MPI_COMM_WORLD);
 		#endif
 		clean_pred(&pred[0]); //user-provided function from bfs_implementation.c
@@ -428,7 +428,7 @@ int main(int argc, char** argv) {
 
 			#ifdef VERBOSE_PRINTS
 				if (rank == 0) fprintf(stderr, RED "Running BFS #%d\n" RESET, bfs_root_idx);
-				FLUSH_WAIT(500000)
+				CCUTILS_FLUSH_WAIT(500000)
 				MPI_Barrier(MPI_COMM_WORLD);
 			#endif
 
@@ -458,7 +458,7 @@ int main(int argc, char** argv) {
 			#ifdef VERBOSE_PRINTS
 				if (rank == 0) fprintf(stderr, "Cut edges: %.1d\n", edge_cut_visit_count);
 				if (rank == 0) fprintf(stderr, "Cut TEPS in BFS %d is %g\n", bfs_root_idx, edge_cut_visit_count / bfs_times[bfs_root_idx]);
-				FLUSH_WAIT(500000)
+				CCUTILS_FLUSH_WAIT(500000)
 				MPI_Barrier(MPI_COMM_WORLD);
 			#endif
 			
@@ -707,12 +707,15 @@ int main(int argc, char** argv) {
 	CCUTILS_MPI_ALL_PRINT_NAMED(packet_bandwidth,
 		for (int run = 0; run < NUM_BFS_ROOTS; run++) {
 			uint32_t i = run * MAX_CUSTOM_PACKET_STATS_PER_RUN;
-			while (bfs_custom_packet_stats[i].comm_time != 0.0) {
-				fprintf(fp, "%d,%lu,%.9f ", 
-					bfs_custom_packet_stats[i].source,
-					bfs_custom_packet_stats[i].buffer_size, 
-					bfs_custom_packet_stats[i].comm_time);
-				++i;
+			uint32_t i_max = (run + 1) * MAX_CUSTOM_PACKET_STATS_PER_RUN;
+			for (;i < i_max; i++) {
+				if (bfs_custom_packet_stats[i].comm_time != 0.0) {
+					fprintf(fp, "%d,%lu,%.9f ", 
+						bfs_custom_packet_stats[i].source,
+						bfs_custom_packet_stats[i].buffer_size, 
+						bfs_custom_packet_stats[i].comm_time);
+					++i;
+				}
 			}
 			fprintf(fp, "\n");
 		}

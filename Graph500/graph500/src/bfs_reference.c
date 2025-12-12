@@ -27,6 +27,10 @@
 extern int64_t nbytes_sent,nbytes_rcvd;
 #endif
 
+#ifdef VERBOSE_PRINTS
+#include <ccutils/colors.h>
+#include <ccutils/mpi/mpi_macros.hpp>
+#endif
 
 extern double *bfs_custom_comm_timer;
 extern int run_number;
@@ -121,7 +125,7 @@ void run_bfs(int64_t root, int64_t* pred) {
 		bfs_custom_comm_timer[run_number] += MPI_Wtime() - custom_start_time;
 
 		#ifdef VERBOSE_PRINTS
-			FLUSH_WAIT(500000)
+			CCUTILS_FLUSH_WAIT(500000)
 			MPI_Barrier(MPI_COMM_WORLD);
 		#endif
 

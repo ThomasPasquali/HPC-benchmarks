@@ -235,23 +235,9 @@ static void process(int fromgroup,int length ,char* message) {
 	int full = (((int)AGGR) - length) <= (int)10; // This accounts for the timestamp in the buffers (8B)
 	uint32_t next_run_stats_begin = (run_number+1) * MAX_CUSTOM_PACKET_STATS_PER_RUN;
 	#ifdef VERBOSE_PRINTS
-		// fprintf(stderr, "-- run: %d full_i=%d, partial_i=%d of %d -- size diff %d-%d=%d (full %d) register: %d idx: %d\n",
-		// 	run_number,
-		// 	bfs_custom_packet_stats_i,
-		// 	bfs_custom_packet_stats_run_partial_i,
-		// 	64*MAX_CUSTOM_PACKET_STATS_PER_RUN,
-		// 	AGGR,
-		// 	length,
-		// 	AGGR - length,
-		// 	full,
-		// 	!full || (bfs_custom_packet_stats_i < next_run_stats_begin-num_procs),
-		// 	full ? bfs_custom_packet_stats_i : next_run_stats_begin-(bfs_custom_packet_stats_run_partial_i+1)
-		// );
 		if (!full) fprintf(stderr, "size diff: %d-%d-%d=%d  full: %s  --- run: %d full_i=%d, partial_i=%d\n",
 			AGGR, sizeof(double),length, AGGR - sizeof(double) - length, full?"Y":"N",
 			run_number, bfs_custom_packet_stats_i, bfs_custom_packet_stats_run_partial_i);
-		if (!full) fprintf(stderr, "Partially filled packet from %d to %d\n", fromgroup, myproc);
-
 		assert(bfs_custom_packet_stats_run_partial_i <= (num_procs*ESTIMATED_MAX_RUN_FRONTIERS));
 	#endif
 	// Last n cells in the run slice are reserved for partially filled buffers
@@ -263,6 +249,9 @@ static void process(int fromgroup,int length ,char* message) {
 			stats_idx = next_run_stats_begin-(++bfs_custom_packet_stats_run_partial_i);
 		}
 		double adjusted_recv_time = MPI_Wtime() - clock_offsets[myproc];
+		#ifdef VERBOSE_PRINTS
+			if (!full) fprintf(stderr, "Registering partially filled packet from %d to %d. stats_idx=%d, comm_time=%f, length - TIMESTAMP_SIZE: %d %d\n", fromgroup, myproc, stats_idx, adjusted_recv_time - send_timestamp, length, TIMESTAMP_SIZE);
+		#endif
 		bfs_custom_packet_stats[stats_idx].comm_time = adjusted_recv_time - send_timestamp;
 		bfs_custom_packet_stats[stats_idx].source = PROC_FROM_GROUPLOCAL(fromgroup,mylocal);
 		bfs_custom_packet_stats[stats_idx].destination = myproc;
