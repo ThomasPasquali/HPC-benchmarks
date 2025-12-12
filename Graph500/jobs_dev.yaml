@@ -1,15 +1,19 @@
 sequential: true
 
 variables:
-  nodes: [8]
-  partition: ["boost_usr_prod"]
-  bin: ["graph500_bfs_2MiB"] # ["graph500_bfs_32KiB", "graph500_bfs_512KiB", "graph500_bfs_2MiB"]
-  scale: [22]
-  edgefactor: [32]
+  nodes: [4]
+  # partition: ["boost_usr_prod"] # Leonardo Booster
+  partition: ["eth"] #, "ib"] # HAICGU
+
+  bin:
+   - "graph500_bfs_2KiB"
+   # - "graph500_bfs_8MiB"
+  scale: [20]
+  edgefactor: [64]
 
 command: "mpirun -np {nodes} ./bin/{bin} {scale} {edgefactor}"
 
 jobs:
   - config: "{partition}_{nodes}nodes"
     config_jobs:
-      - tag: "graph500_{partition}_distances"
+      - tag: "graph500_{partition}"

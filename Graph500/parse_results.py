@@ -1,197 +1,131 @@
-from pathlib import Path
-import sbatchman as sbm
-import numpy as np
 import re
-from collections import defaultdict
-from typing import Dict, Tuple
+import sys
+from pathlib import Path
+from typing import Any, Dict, Tuple
+import warnings
+import numpy as np
 import pandas as pd
+import sbatchman as sbm
+import graph500.ccutils.parser.ccutils_parser as ccutils_parser
+
+sys.path.append(str(Path(__file__).parent.parent / "machines"))
+from Leonardo.nodelists_generator import LeonardoNodelistGenerator
+from HAICGU.nodes_map import HAICGUNodesMap
+
+sys.path.append(str(Path(__file__).parent.parent))
+import py_utils.import_export as import_export
 
 OUT_DIR = Path('results')
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-def parse_metrics_file(filepath: Path, rank_filter=None, run_filter=None) -> Tuple[float, float, Dict, Dict]:
-  barrier_times = defaultdict(dict)
-  comm_stats = defaultdict(lambda: defaultdict(dict))
-  teps = 0.0
-  cut_teps = 0.0
-  with open(filepath, "r") as f:
-    for line in f:
-      # print(line[:-1])
-      if 'harmonic_mean_TEPS' in line:
-        line = re.subn(r'\s{2,}', ' ', line)[0]
-        teps = float(line.split(' ')[-1])
-        continue
-      if 'harmonic_mean_cut_TEPS' in line:
-        line = re.subn(r'\s{2,}', ' ', line)[0]
-        cut_teps = float(line.split(' ')[-1])
-        continue
-      if not line.startswith("[METRIC]"):
-        continue
+NODES_MAP = None
 
-      tokens = line.strip().split()
-      try:
-        rank = int(tokens[1].split("=")[1])
-        run = int(tokens[2].split("=")[1])
+def dict_get(d, key):
+    r = d.get(key)
+    if r is None:
+        raise KeyError(f"{key} not found")
+    return r
 
-        if rank_filter is not None and rank != rank_filter:
-          continue
-        if run_filter is not None and run != run_filter:
-          continue
 
-        if "barrier_wait_time" in line:
-          time = float(tokens[3].split("=")[1])
-          barrier_times[rank][run] = time
+def raise_none(v, msg):
+    if v is None:
+        raise ValueError(f"{msg} not found")
+    return v
+
+
+def parse_job(j: sbm.Job, run_indices=range(64)) -> Tuple[Dict[Any, Any], pd.DataFrame]:
+    """
+    Returns: list of DataFrames with added jobid/run columns
+    """
+    stdout = raise_none(j.get_stdout(), "stdout")
+    res = ccutils_parser.parse_ccutils_output(stdout)
+
+    # Map rank → node number
+    ranks_nodes_map = {}
+    nodes = dict_get(res, "node_names")
+    nodes = raise_none(nodes.get_mpi_print("node_names"), "node_names")
+
+    for r in raise_none(nodes.get_all_ranks(), "nodes.get_all_ranks()"):
+        node_str = raise_none(nodes.get_rank_output(r), f"node for rank {r}")
+        if j.cluster_name == 'leonardo':
+            ranks_nodes_map[r] = int(node_str.split(".")[0][4:])
         else:
-          dest = int(tokens[3].split("=")[1])
-          n_comms = int(tokens[4].split("=")[1])
-          volume = int(tokens[5].split("=")[1])
-          comm_stats[rank][run][dest] = (n_comms, volume)
-      except (IndexError, ValueError):
-        raise
+            ranks_nodes_map[r] = node_str
 
-  return cut_teps, teps, barrier_times, comm_stats
+    details = dict_get(res, "detailed_results")
+    packet_bw = dict_get(details.mpi_all_prints, "packet_bandwidth")
+    general = dict_get(res, "general_results").raw_text
+    
+    meta = {}
+    vars = raise_none(j.variables, "job variables")
+    for k in ['nodes', 'edgefactor', 'scale', 'partition']:
+        meta[k] = vars[k]
+    meta['buffer_size'] = vars['bin'].split('_')[-1]
+    meta['cluster'] = j.cluster_name
+    teps = -1
+    for line in general.strip().splitlines():
+        if 'harmonic_mean_TEPS' in line:
+            line = re.subn(r'\s{2,}', ' ', line)[0]
+            teps = float(line.split(' ')[-1])
+            continue
+    meta["teps"] = teps
+
+    out_dfs = []
+    for run_i in run_indices:
+        rows = []
+        if int(vars['nodes']) > 1:
+            for dest in packet_bw.get_all_ranks():
+                rank_output = packet_bw.get_rank_output(dest)
+                if not rank_output:
+                    continue
+
+                for msg in rank_output.splitlines()[run_i].strip().split(" "):
+                    if not msg: continue
+                    src, size, t = msg.split(",")
+                    distance = -1
+                    if NODES_MAP:
+                        distance = NODES_MAP.get_node_distance(
+                            ranks_nodes_map[int(src)],
+                            ranks_nodes_map[int(dest)],
+                        )
+                    rows.append([
+                        int(src),
+                        int(dest),
+                        int(size),
+                        float(t),
+                        distance,
+                    ])
+
+        df = pd.DataFrame(rows, columns=["src", "dest", "size", "time", "distance"])
+        df["distance"] = df["distance"].astype(np.int8)
+        df["run"] = run_i
+
+        # Clean negative times
+        neg = df["time"] < 0
+        df.loc[neg, "time"] = 0.0
+
+        if not df.empty:
+            out_dfs.append(df)
+
+    return meta, pd.concat(out_dfs, ignore_index=True) if len(out_dfs) > 0 else pd.DataFrame()
+
 
 def main():
-  data = defaultdict(list)
-  jobs = sbm.jobs_list(from_active=True, from_archived=False, status=[sbm.Status.COMPLETED])
-  for job in jobs:
-    m = re.match(r'(\w+)_(\d+)nodes', job.config_name)
-    if not m:
-      continue
-
-    command_parts = job.command.split(' ')
-    edgefactor = int(command_parts[-1])
-    scale = int(command_parts[-2])
-    program = None
-    p = None
-    for p in command_parts:
-      if 'graph500_reference_bfs' in p:
-        program = p
-        break
-    if p is None:
-      raise Exception(f'Could not find executable in command "{job.command}"')
-    partition, nodes_str = m.groups()
-    nodes = int(nodes_str)
-
-    # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    # print((nodes, scale, edgefactor))
-    # if nodes == 4 and edgefactor == 8 and scale == 14:
-    # print('='*100)
-    cut_teps, teps, barrier_times, comm_stats = parse_metrics_file(job.get_stdout_path())
-    # else:
-    #   continue
-
-    if not barrier_times:
-      continue
-
-    num_ranks = len(barrier_times)
-    num_runs = len(next(iter(barrier_times.values())))  # use first rank to get run count
-
-    # Create barrier time matrix (ranks x runs)
-    barrier_matrix = np.zeros((num_runs, num_ranks))
-    for r in barrier_times:
-      for run in barrier_times[r]:
-        barrier_matrix[run, r] = barrier_times[r][run]
-
-    volume_matrix = np.zeros((num_runs, num_ranks, num_ranks))
-    count_matrix = np.zeros((num_runs, num_ranks, num_ranks))
-    for src, run_dict in comm_stats.items():
-      for run, dst_dict in run_dict.items():
-        for dst, (n_comms, volume) in dst_dict.items():
-          volume_matrix[run][src][dst] += volume
-          count_matrix[run][src][dst] += n_comms
-
-    impl = 'classic'
-    if 'smallbuf' in program:
-      impl = 'smallbuf'
-    elif 'largebuf' in program:
-      impl = 'largebuf'
-      
-    cluster = job.cluster_name
-    key = (cluster, partition, impl, scale, edgefactor)
-
-    data[key].append((
-      (nodes, teps, cut_teps),    # TEPS
-      nodes,                      # for filename suffixes
-      barrier_matrix,             # Barrier Times
-      volume_matrix,              # Volume matrix
-      count_matrix                # Count matrix
-    ))
-
-  # Prepare DataFrame
-  df_records_aggr = []
-  df_records = []
-  for (cluster, partition, impl, scale, edgefactor), entries in data.items():
-    for entry in entries:
-      (nodes, teps, cut_teps), _, barrier_matrix, volume_matrix, count_matrix = entry
-
-      mean_packet_size = np.nanmean(np.divide(
-        volume_matrix, count_matrix,
-        out=np.full_like(volume_matrix, np.nan, dtype=float),
-        where=count_matrix != 0
-      ))
-      df_records_aggr.append({
-        "cluster": cluster,
-        "partition": partition,
-        "impl": impl,
-        "scale": int(scale),
-        "edgefactor": int(edgefactor),
-        "nodes": nodes,
-        "teps": teps,
-        "cut_teps": cut_teps,
-        "mean_barrier_time": np.mean(barrier_matrix),
-        "std_barrier_time": np.std(barrier_matrix),
-        "total_comm_volume": np.sum(volume_matrix),
-        "total_comm_count": np.sum(count_matrix),
-        "mean_packet_size": 0.0 if np.isnan(mean_packet_size) else mean_packet_size,
-      })
-
-      for run_i in range(len(barrier_matrix)):
-        mean_packet_size = np.nanmean(np.divide(
-          volume_matrix[run_i], count_matrix[run_i],
-          out=np.full_like(volume_matrix[run_i], np.nan, dtype=float),
-          where=count_matrix[run_i] != 0
-        ))
-        # print(volume_matrix[run_i])
-        # print(count_matrix[run_i])
-        # print(np.divide(
-        #     volume_matrix[run_i], count_matrix[run_i],
-        #     out=np.full_like(volume_matrix[run_i], np.nan, dtype=float),
-        #     where=count_matrix[run_i] != 0
-        #   ))
-        # print(mean_packet_size)
-        # print(np.nansum(np.divide(
-        #     volume_matrix[run_i], count_matrix[run_i],
-        #     out=np.full_like(volume_matrix[run_i], np.nan, dtype=float),
-        #     where=count_matrix[run_i] != 0
-        #   )))
-        # print('='*100)
+    global NODES_MAP
+    jobs = sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=False)
+    # FIXME this only checks job 0
+    cluster_name = jobs[0].cluster_name
+    
+    if cluster_name == 'leonardo':
+        NODES_MAP = LeonardoNodelistGenerator()
+    if cluster_name == 'haicgu':
+        NODES_MAP = HAICGUNodesMap()
+    else:
+        warnings.warn(f'No distance script found for cluster {cluster_name}')
         
-        df_records.append({
-          "cluster": cluster,
-          "partition": partition,
-          "impl": impl,
-          "scale": int(scale),
-          "edgefactor": int(edgefactor),
-          "nodes": nodes,
-          "run": run_i,
-          "mean_barrier_time": np.mean(barrier_matrix[run_i]),
-          "std_barrier_time": np.std(barrier_matrix[run_i]),
-          "total_comm_volume": np.sum(volume_matrix[run_i]),
-          "total_comm_count": np.sum(count_matrix[run_i]),
-          "mean_packet_size": 0.0 if np.isnan(mean_packet_size) else mean_packet_size,
-        })
-        
+    meta_df_pairs = [parse_job(j) for j in jobs]
+    out_file = OUT_DIR / f'graph500_{cluster_name}_data.parquet'
+    import_export.write_multiple_to_parquet(meta_df_pairs, out_file)
 
-  df_aggr = pd.DataFrame(df_records_aggr)
-  path = OUT_DIR / f"graph500_{sbm.get_cluster_name()}_summary_aggr.csv"
-  df_aggr.to_csv(path, index=False)
-  print(f"Wrote CSV summary with {len(df_aggr)} rows to {path.resolve().absolute()}")
-
-  df = pd.DataFrame(df_records)
-  path = OUT_DIR / f"graph500_{sbm.get_cluster_name()}_summary.csv"
-  df.to_csv(path, index=False)
-  print(f"Wrote CSV summary with {len(df)} rows to {path.resolve().absolute()}")
-  
 if __name__ == "__main__":
-  main()
+    main()

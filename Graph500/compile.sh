@@ -15,7 +15,7 @@ mkdir -p ../../bin
 
 # Standard benchmark
 make deep_clean
-CFLAGS="-DBENCHPIN" make graph500_reference_bfs
+CFLAGS="-DBENCHPIN" PREPROCESSOR_FLAGS="-DAGGR_intra=32768 -DAGGR=32768" make graph500_reference_bfs
 mv graph500_reference_bfs ../../bin/graph500_bfs_32KiB
 
 # Benchmarks that flushes the buffer more often: after 512 vertices instead of 8192
@@ -25,12 +25,12 @@ mv graph500_reference_bfs ../../bin/graph500_bfs_2KiB
 
 # Benchmarks that flushes the buffer less often
 make clean
-CFLAGS="-DBENCHPIN" PREPROCESSOR_FLAGS="-DAGGR_intra=524288 -DAGGR=524288" make graph500_reference_bfs
-mv graph500_reference_bfs ../../bin/graph500_bfs_512KiB
+CFLAGS="-DBENCHPIN" PREPROCESSOR_FLAGS="-DAGGR_intra=262144 -DAGGR=262144" make graph500_reference_bfs
+mv graph500_reference_bfs ../../bin/graph500_bfs_256KiB
 
 # Benchmarks that flushes the buffer even less often
 make clean
-CFLAGS="-DBENCHPIN" PREPROCESSOR_FLAGS="-DAGGR_intra=2097152 -DAGGR=2097152" make graph500_reference_bfs
-mv graph500_reference_bfs ../../bin/graph500_bfs_2MiB
+CFLAGS="-DBENCHPIN" PREPROCESSOR_FLAGS="-DAGGR_intra=8388608 -DAGGR=8388608" make graph500_reference_bfs
+mv graph500_reference_bfs ../../bin/graph500_bfs_8MiB
 
 echo "WARNING: currently only BFS implements custom metric correctly."

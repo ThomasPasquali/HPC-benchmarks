@@ -13,7 +13,9 @@ This repository gathers HPC benchmarks:
 
 ## List of Distributed-Memory Benchmarks (estimated runtime)
 
-- Graph500 (50 min)
+- Graph500 (HAICGU)
+    - 2 nodes, scale 20, edgefactor 64 , ~4min
+    - 4 nodes, scale 20, edgefactor 64, ~2min
 - HPL (2 hours)
 - HPCG (40 min)
 - DNNProxies (15 min)
