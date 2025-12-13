@@ -8,7 +8,7 @@ import argparse
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.constants import *
-from py_utils.utils import create_color_map, create_marker_map, format_bytes
+from py_utils.utils.plots import create_color_map, create_marker_map, format_bytes
 import py_utils.import_export as import_export
 
 FONT_AXES = 20

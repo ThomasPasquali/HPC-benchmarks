@@ -9,7 +9,7 @@ import sbatchman as sbm
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.cli import get_basic_cli_parser, load_csv_files
-from py_utils.utils import add_zoom_inset
+from py_utils.utils.plots import add_zoom_inset
 from py_utils.constants import *
 
 FONT_TITLE -= 12

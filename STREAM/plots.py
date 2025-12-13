@@ -46,7 +46,7 @@ import matplotlib.pyplot as plt
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.cli import load_csv_files
 from py_utils.constants import *
-from py_utils.utils import add_zoom_inset
+from py_utils.utils.plots import add_zoom_inset
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Regex patterns and constants

@@ -6,7 +6,7 @@ import seaborn as sns
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.constants import *
-from py_utils.utils import create_color_map, create_linestyle_map, create_marker_map
+from py_utils.utils.plots import create_color_map, create_linestyle_map, create_marker_map
 
 FONT_TITLE = 18
 FONT_AXES = 18

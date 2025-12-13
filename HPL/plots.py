@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.constants import *
-from py_utils.utils import create_color_map, create_linestyle_map
+from py_utils.utils.plots import create_color_map, create_linestyle_map
 
 plt.rc('axes', titlesize=FONT_AXES - 2)     # fontsize of the axes title
 plt.rc('axes', labelsize=FONT_AXES - 2)     # fontsize of the x and y labels

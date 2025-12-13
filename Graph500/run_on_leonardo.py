@@ -233,6 +233,8 @@ def main():
                     "SKIP_VALIDATION=1",
                     "OMP_PROC_BIND=true",
                     "OMP_NUM_THREADS=32",
+                    "NCCL_IB_SL=1",
+                    "UCX_IB_SL=1",
                 ],
                 modules=[
                     "gcc/12.2.0",
