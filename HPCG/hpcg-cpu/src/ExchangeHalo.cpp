@@ -25,22 +25,18 @@
 #include "ExchangeHalo.hpp"
 #include <cstdlib>
 
-//FIXME delete
-#include <string>
-#include <iostream>
-
-#include <ccutils/mpi/mpi_timers.h>
-#include <ccutils/mpi/mpi_macros.h>
+#include <ccutils/mpi/mpi_timers.hpp>
+#include <ccutils/mpi/mpi_macros.hpp>
 //TODO: add the ifdef CCUTILS_TIMERS around the MPI_TIMER_DEF
-MPI_TIMER_DEF(halo_times)
+CCUTILS_MPI_TIMER_DEF(halo_times)
 std::vector<std::string> halo_kernel_call;
 std::vector<std::vector<size_t>> halo_msg_size;
 extern bool collect_info;
 extern bool preconditioning;
 
 #define MPI_TIMER_STOP_CONDITIONAL(timer) \
-  MPI_TIMER_STOP(timer)                   \
-  if(!collect_info)                        \
+  CCUTILS_MPI_TIMER_STOP(timer)           \
+  if(!collect_info)                       \
     __timer_vals_##timer.pop_back();
 
 
@@ -52,7 +48,7 @@ extern bool preconditioning;
  */
 void ExchangeHalo(const SparseMatrix & A, Vector & x, const char* kernel_name) {
   #ifdef USE_CCUTILS_TIMERS
-    MPI_TIMER_START(halo_times)
+    CCUTILS_MPI_TIMER_START(halo_times)
   #endif
   // Extract Matrix pieces
 

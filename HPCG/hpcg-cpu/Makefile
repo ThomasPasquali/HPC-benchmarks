@@ -6,6 +6,14 @@ arch = UNKNOWN
 setup_file = setup/Make.$(arch)
 include $(setup_file)
 
+all: bin/xhpcg
+
+$(CCUTILS):
+	cd $(CCUTILS_ROOT) && \
+	cmake -S . -B build -DCCUTILS_ENABLE_MPI=ON && \
+	cmake --build build && \
+	cmake --install build --prefix ./install
+
 HPCG_DEPS = src/CG.o src/CG_ref.o src/TestCG.o src/ComputeResidual.o \
          src/ExchangeHalo.o src/GenerateGeometry.o src/GenerateProblem.o \
          src/GenerateProblem_ref.o src/CheckProblem.o \
@@ -17,11 +25,14 @@ HPCG_DEPS = src/CG.o src/CG_ref.o src/TestCG.o src/ComputeResidual.o \
          src/ComputeMG_ref.o src/ComputeMG.o src/ComputeProlongation_ref.o src/ComputeRestriction_ref.o src/GenerateCoarseProblem.o \
 	 src/ComputeOptimalShapeXYZ.o src/MixedBaseCounter.o src/CheckAspectRatio.o src/OutputFile.o
 
-bin/xhpcg: src/main.o $(HPCG_DEPS)
+bin/xhpcg: src/main.o $(HPCG_DEPS) $(CCUTILS)
 	$(LINKER) $(LINKFLAGS) src/main.o $(HPCG_DEPS) -o bin/xhpcg $(HPCG_LIBS)
 
 clean:
 	rm -f $(HPCG_DEPS) bin/xhpcg src/main.o
+
+deep_clean: clean
+	rm -rf $(CCUTILS_ROOT)/ccutils/install $(CCUTILS_ROOT)/ccutils/build;
 
 .PHONY: clean
 

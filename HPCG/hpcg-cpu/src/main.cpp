@@ -63,9 +63,9 @@ using std::endl;
 #include <stdio.h>
 #include <string>
 
-#include <ccutils/timers.h> 
-#include <ccutils/mpi/mpi_timers.h>
-#include <ccutils/mpi/mpi_macros.h>
+#include <ccutils/timers.hpp> 
+#include <ccutils/mpi/mpi_timers.hpp>
+#include <ccutils/mpi/mpi_macros.hpp>
 
 //TODO: transform this into macros in ccutils
 bool collect_info = false;
@@ -413,7 +413,7 @@ int main(int argc, char * argv[]) {
   #endif
   
 
-  MPI_SECTION_DEF(cg, "CG Benchmark Runs");
+  CCUTILS_MPI_SECTION_DEF(cg, "CG Benchmark Runs");
 
   for (int i=0; i< numberOfCgSets; ++i) {
     PRINT_SEP("Start of Run " << i)
@@ -423,15 +423,15 @@ int main(int argc, char * argv[]) {
     if (rank==0) HPCG_fout << "Call [" << i << "] Scaled Residual [" << normr/normr0 << "]" << endl;
     testnorms_data.values[i] = normr/normr0; // Record scaled residual from this run
     std::string key_iter = std::to_string(i);
-    SECTION_JSON_SUB_PUT(cg, key_iter, "cg_times", __timer_vals_cg_times);
-    SECTION_JSON_SUB_PUT(cg, key_iter, "dotp_allreduce", __timer_vals_dotp_allreduce_times);
-    SECTION_JSON_SUB_PUT(cg, key_iter, "dotp", __timer_vals_dotp_times);
-    SECTION_JSON_SUB_PUT(cg, key_iter, "spmv", __timer_vals_spmv_times);
-    SECTION_JSON_SUB_PUT(cg, key_iter, "mg", __timer_vals_mg_times);
-    SECTION_JSON_SUB_PUT(cg, key_iter, "waxpby", __timer_vals_waxpby_times);
-    SECTION_JSON_SUB_PUT(cg, key_iter, "exchange_halo", __timer_vals_halo_times);
-    SECTION_JSON_SUB_PUT(cg, key_iter, "halo_kernels", halo_kernel_call);
-    SECTION_JSON_SUB_PUT(cg, key_iter, "halo_msg_sizes", halo_msg_size);
+    CCUTILS_SECTION_JSON_SUB_PUT(cg, key_iter, "cg_times", __timer_vals_cg_times);
+    CCUTILS_SECTION_JSON_SUB_PUT(cg, key_iter, "dotp_allreduce", __timer_vals_dotp_allreduce_times);
+    CCUTILS_SECTION_JSON_SUB_PUT(cg, key_iter, "dotp", __timer_vals_dotp_times);
+    CCUTILS_SECTION_JSON_SUB_PUT(cg, key_iter, "spmv", __timer_vals_spmv_times);
+    CCUTILS_SECTION_JSON_SUB_PUT(cg, key_iter, "mg", __timer_vals_mg_times);
+    CCUTILS_SECTION_JSON_SUB_PUT(cg, key_iter, "waxpby", __timer_vals_waxpby_times);
+    CCUTILS_SECTION_JSON_SUB_PUT(cg, key_iter, "exchange_halo", __timer_vals_halo_times);
+    CCUTILS_SECTION_JSON_SUB_PUT(cg, key_iter, "halo_kernels", halo_kernel_call);
+    CCUTILS_SECTION_JSON_SUB_PUT(cg, key_iter, "halo_msg_sizes", halo_msg_size);
 
     //clear vectors for next iteration
     std::vector<std::string>().swap(halo_kernel_call);
@@ -461,20 +461,22 @@ int main(int argc, char * argv[]) {
 
   PRINT_SEP("Reporting Results")
   
-  MPI_GLOBAL_JSON_PUT(cg, "world_size", size);
-  MPI_GLOBAL_JSON_PUT(cg, "cg_sets", numberOfCgSets);
-  MPI_GLOBAL_JSON_PUT(cg, "grid_size_nx", params.nx);
-  MPI_GLOBAL_JSON_PUT(cg, "grid_size_ny", params.ny);
-  MPI_GLOBAL_JSON_PUT(cg, "grid_size_nz", params.nz);
+  CCUTILS_MPI_GLOBAL_JSON_PUT(cg, "world_size", size);
+  CCUTILS_MPI_GLOBAL_JSON_PUT(cg, "cg_sets", numberOfCgSets);
+  CCUTILS_MPI_GLOBAL_JSON_PUT(cg, "grid_size_nx", params.nx);
+  CCUTILS_MPI_GLOBAL_JSON_PUT(cg, "grid_size_ny", params.ny);
+  CCUTILS_MPI_GLOBAL_JSON_PUT(cg, "grid_size_nz", params.nz);
 
-  MPI_SECTION_END(cg);
+  CCUTILS_MPI_SECTION_END(cg);
 
   ////////////////////
   // Report Results //
   ////////////////////
 
   // Report results to YAML file
+  CCUTILS_SECTION_DEF(hpcg_output, "Classic HPCG benchmark output")
   ReportResults(A, numberOfMgLevels, numberOfCgSets, refMaxIters, optMaxIters, &times[0], testcg_data, testsymmetry_data, testnorms_data, global_failure, quickPath);
+  CCUTILS_SECTION_END(hpcg_output)
   
   PRINT_SEP("Cleanup")
   // Clean up

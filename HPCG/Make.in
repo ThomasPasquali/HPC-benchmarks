@@ -100,7 +100,8 @@ LAname        = -l#LAname#
 # - HPCG includes / libraries / specifics -------------------------------
 # ----------------------------------------------------------------------
 #
-CCUTILS = $(HOME)/ccutils/install/include
+CCUTILS = $(TOPdir)/../../ccutils/install/include
+CCUTILS_ROOT = $(TOPdir)/../../ccutils
 
 HPCG_INCLUDES = -I$(INCdir) -I$(INCdir)/$(ARCH) $(LAinc) $(MPinc) -I$(CCUTILS)
 HPCG_LIBS     = $(LAlib) $(LAname) $(MPlib) $(MPname)

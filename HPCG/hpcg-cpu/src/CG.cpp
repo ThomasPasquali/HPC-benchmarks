@@ -37,13 +37,13 @@
 extern bool collect_info;
 bool preconditioning = false;
 
-#include <ccutils/mpi/mpi_timers.h>
-#include <ccutils/mpi/mpi_macros.h>
-MPI_TIMER_DEF(cg_times)
-MPI_TIMER_DEF(spmv_times)
-MPI_TIMER_DEF(mg_times)
-MPI_TIMER_DEF(dotp_times)
-MPI_TIMER_DEF(waxpby_times)
+#include <ccutils/mpi/mpi_timers.hpp>
+#include <ccutils/mpi/mpi_macros.hpp>
+CCUTILS_MPI_TIMER_DEF(cg_times)
+CCUTILS_MPI_TIMER_DEF(spmv_times)
+CCUTILS_MPI_TIMER_DEF(mg_times)
+CCUTILS_MPI_TIMER_DEF(dotp_times)
+CCUTILS_MPI_TIMER_DEF(waxpby_times)
 extern std::vector<double> __timer_vals_dotp_allreduce_times;
 extern std::vector<double> __timer_vals_halo_times;
 extern std::vector<std::string> halo_kernel_call;
@@ -51,7 +51,7 @@ extern std::vector<std::vector<size_t>> halo_msg_size;
 
 
 #define MPI_TIMER_STOP_CONDITIONAL(timer)   \
-  MPI_TIMER_STOP(timer)                     \
+  CCUTILS_MPI_TIMER_STOP(timer)             \
   if(!collect_info)                         \
     __timer_vals_##timer.pop_back();
 
@@ -85,7 +85,7 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
     double * times, bool doPreconditioning, int iter) {
 
   #ifdef USE_CCUTILS_TIMERS
-    MPI_TIMER_START(cg_times)
+    CCUTILS_MPI_TIMER_START(cg_times)
   #endif
   double t_begin = mytimer();  // Start timing right away
   normr = 0.0;
@@ -112,19 +112,19 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
   // p is of length ncols, copy x to p for sparse MV operation
   CopyVector(x, p);
   #ifdef USE_CCUTILS_TIMERS
-    MPI_TIMER_START(spmv_times); ComputeSPMV(A, p, Ap, tHalo); MPI_TIMER_STOP_CONDITIONAL(spmv_times);  // Ap = A*p
+    CCUTILS_MPI_TIMER_START(spmv_times); ComputeSPMV(A, p, Ap, tHalo); MPI_TIMER_STOP_CONDITIONAL(spmv_times);  // Ap = A*p
   #else
     TICK(); ComputeSPMV(A, p, Ap, tHalo); TOCK(t3);  // Ap = A*p
   #endif
   
   #ifdef USE_CCUTILS_TIMERS
-    MPI_TIMER_START(waxpby_times); ComputeWAXPBY(nrow, 1.0, b, -1.0, Ap, r, A.isWaxpbyOptimized); MPI_TIMER_STOP_CONDITIONAL(waxpby_times); // r = b - Ax (x stored in p)
+    CCUTILS_MPI_TIMER_START(waxpby_times); ComputeWAXPBY(nrow, 1.0, b, -1.0, Ap, r, A.isWaxpbyOptimized); MPI_TIMER_STOP_CONDITIONAL(waxpby_times); // r = b - Ax (x stored in p)
   #else
     TICK(); ComputeWAXPBY(nrow, 1.0, b, -1.0, Ap, r, A.isWaxpbyOptimized);  TOCK(t2); // r = b - Ax (x stored in p)
   #endif
   
   #ifdef USE_CCUTILS_TIMERS
-    MPI_TIMER_START(dotp_times); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times);
+    CCUTILS_MPI_TIMER_START(dotp_times); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times);
   #else
     TICK(); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); TOCK(t1);
   #endif
@@ -145,7 +145,7 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
   // Convergence check accepts an error of no more than 6 significant digits of tolerance
   for (int k=1; k<=max_iter && normr/normr0 > tolerance * (1.0 + 1.0e-6); k++ ) {
     #ifdef USE_CCUTILS_TIMERS
-      MPI_TIMER_START(mg_times);
+      CCUTILS_MPI_TIMER_START(mg_times);
       if (doPreconditioning){
         preconditioning = true;
         ComputeMG(A, r, z);
@@ -169,13 +169,13 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
 
     if (k == 1) {
       #ifdef USE_CCUTILS_TIMERS
-        MPI_TIMER_START(waxpby_times); ComputeWAXPBY(nrow, 1.0, z, 0.0, z, p, A.isWaxpbyOptimized); MPI_TIMER_STOP_CONDITIONAL(waxpby_times); // Copy Mr to p
+        CCUTILS_MPI_TIMER_START(waxpby_times); ComputeWAXPBY(nrow, 1.0, z, 0.0, z, p, A.isWaxpbyOptimized); MPI_TIMER_STOP_CONDITIONAL(waxpby_times); // Copy Mr to p
       #else
         TICK(); ComputeWAXPBY(nrow, 1.0, z, 0.0, z, p, A.isWaxpbyOptimized); TOCK(t2); // Copy Mr to p
       #endif      
 
       #ifdef USE_CCUTILS_TIMERS
-        MPI_TIMER_START(dotp_times); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times); // rtz = r'*z
+        CCUTILS_MPI_TIMER_START(dotp_times); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times); // rtz = r'*z
       #else
         TICK(); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
       #endif       
@@ -183,42 +183,42 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
     } else {
       oldrtz = rtz;
       #ifdef USE_CCUTILS_TIMERS
-        MPI_TIMER_START(dotp_times); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times); // rtz = r'*z
+        CCUTILS_MPI_TIMER_START(dotp_times); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times); // rtz = r'*z
       #else
         TICK(); ComputeDotProduct (nrow, r, z, rtz, t4, A.isDotProductOptimized); TOCK(t1); // rtz = r'*z
       #endif
       beta = rtz/oldrtz;
 
       #ifdef USE_CCUTILS_TIMERS
-        MPI_TIMER_START(waxpby_times); ComputeWAXPBY (nrow, 1.0, z, beta, p, p, A.isWaxpbyOptimized); MPI_TIMER_STOP_CONDITIONAL(waxpby_times); // p = beta*p + z
+        CCUTILS_MPI_TIMER_START(waxpby_times); ComputeWAXPBY (nrow, 1.0, z, beta, p, p, A.isWaxpbyOptimized); MPI_TIMER_STOP_CONDITIONAL(waxpby_times); // p = beta*p + z
       #else
         TICK(); ComputeWAXPBY (nrow, 1.0, z, beta, p, p, A.isWaxpbyOptimized);  TOCK(t2); // p = beta*p + z
       #endif
     }
 
     #ifdef USE_CCUTILS_TIMERS
-      MPI_TIMER_START(spmv_times); ComputeSPMV(A, p, Ap, tHalo); MPI_TIMER_STOP_CONDITIONAL(spmv_times); // Ap = A*p
+      CCUTILS_MPI_TIMER_START(spmv_times); ComputeSPMV(A, p, Ap, tHalo); MPI_TIMER_STOP_CONDITIONAL(spmv_times); // Ap = A*p
     #else
       TICK(); ComputeSPMV(A, p, Ap, tHalo); TOCK(t3); // Ap = A*p
     #endif
     
     #ifdef USE_CCUTILS_TIMERS
-      MPI_TIMER_START(dotp_times); ComputeDotProduct(nrow, p, Ap, pAp, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times); // pAp = p'*Ap
+      CCUTILS_MPI_TIMER_START(dotp_times); ComputeDotProduct(nrow, p, Ap, pAp, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times); // pAp = p'*Ap
     #else
       TICK(); ComputeDotProduct(nrow, p, Ap, pAp, t4, A.isDotProductOptimized); TOCK(t1); // pAp = p'*Ap
     #endif
 
     alpha = rtz/pAp;
     #ifdef USE_CCUTILS_TIMERS
-      MPI_TIMER_START(waxpby_times); ComputeWAXPBY(nrow, 1.0, x, alpha, p, x, A.isWaxpbyOptimized); MPI_TIMER_STOP_CONDITIONAL(waxpby_times); // x = x + alpha*p; MPI_TIMER_STOP_CONDITIONAL(waxpby_times);
-      MPI_TIMER_START(waxpby_times); ComputeWAXPBY(nrow, 1.0, r, -alpha, Ap, r, A.isWaxpbyOptimized);  MPI_TIMER_STOP_CONDITIONAL(waxpby_times);// r = r - alpha*Ap
+      CCUTILS_MPI_TIMER_START(waxpby_times); ComputeWAXPBY(nrow, 1.0, x, alpha, p, x, A.isWaxpbyOptimized); MPI_TIMER_STOP_CONDITIONAL(waxpby_times); // x = x + alpha*p; MPI_TIMER_STOP_CONDITIONAL(waxpby_times);
+      CCUTILS_MPI_TIMER_START(waxpby_times); ComputeWAXPBY(nrow, 1.0, r, -alpha, Ap, r, A.isWaxpbyOptimized);  MPI_TIMER_STOP_CONDITIONAL(waxpby_times);// r = r - alpha*Ap
     #else
       TICK(); ComputeWAXPBY(nrow, 1.0, x, alpha, p, x, A.isWaxpbyOptimized);// x = x + alpha*p
               ComputeWAXPBY(nrow, 1.0, r, -alpha, Ap, r, A.isWaxpbyOptimized);  TOCK(t2);// r = r - alpha*Ap
     #endif
 
    #ifdef USE_CCUTILS_TIMERS
-      MPI_TIMER_START(dotp_times); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times);
+      CCUTILS_MPI_TIMER_START(dotp_times); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); MPI_TIMER_STOP_CONDITIONAL(dotp_times);
     #else
       TICK(); ComputeDotProduct(nrow, r, r, normr, t4, A.isDotProductOptimized); TOCK(t1);
     #endif
