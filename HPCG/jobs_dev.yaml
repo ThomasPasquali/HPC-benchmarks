@@ -2,8 +2,8 @@
 sequential: true
 
 variables:
-  nodes: [1, 2, 4, 8]
-  partition: ["eth", "ib"]
+  nodes: [4]
+  partition: ["ib"]
 
   grid_size: [128]
   min_runtime: [20] # In seconds
