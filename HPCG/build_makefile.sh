@@ -34,6 +34,7 @@ sed "s|#ARCH#|${ARCH}|g; s|#LAlib#|${LAlib}|g; s|#LAname#|${LAname}|g; s|#LAinc#
 # fi
 
 cd ${HPCG_PATH}
+mkdir -p bin
 cp ../Make.out "./setup/Make.${ARCH}"
 
 # Makefile build

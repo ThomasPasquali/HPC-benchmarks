@@ -25,7 +25,7 @@ HPCG_DEPS = src/CG.o src/CG_ref.o src/TestCG.o src/ComputeResidual.o \
          src/ComputeMG_ref.o src/ComputeMG.o src/ComputeProlongation_ref.o src/ComputeRestriction_ref.o src/GenerateCoarseProblem.o \
 	 src/ComputeOptimalShapeXYZ.o src/MixedBaseCounter.o src/CheckAspectRatio.o src/OutputFile.o
 
-bin/xhpcg: src/main.o $(HPCG_DEPS) $(CCUTILS)
+bin/xhpcg: $(CCUTILS) src/main.o $(HPCG_DEPS)
 	$(LINKER) $(LINKFLAGS) src/main.o $(HPCG_DEPS) -o bin/xhpcg $(HPCG_LIBS)
 
 clean:

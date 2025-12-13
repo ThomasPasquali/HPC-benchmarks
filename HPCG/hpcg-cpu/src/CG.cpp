@@ -132,12 +132,13 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
   normr = sqrt(normr);
 #ifdef HPCG_DEBUG
   if (A.geom->rank==0) HPCG_fout << "Initial Residual = "<< normr << std::endl;
-#endif
+
 
   if (A.geom->rank==0) {
     HPCG_fout << "$$$ End init" << std::endl;
   }
   MPI_Barrier(MPI_COMM_WORLD);
+#endif
 
   // Record initial residual for convergence testing
   normr0 = normr;
@@ -162,10 +163,12 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
 
     preconditioning = false;
     MPI_Barrier(MPI_COMM_WORLD);
+#ifdef HPCG_DEBUG
     if (A.geom->rank==0) {
       HPCG_fout << "$$$ End preconditioner" << std::endl;
     }
     MPI_Barrier(MPI_COMM_WORLD);
+#endif
 
     if (k == 1) {
       #ifdef USE_CCUTILS_TIMERS
@@ -226,11 +229,12 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
 #ifdef HPCG_DEBUG
     if (A.geom->rank==0 && (k%print_freq == 0 || k == max_iter))
       HPCG_fout << "Iteration = "<< k << " (max " << max_iter << ")   Scaled Residual = "<< normr/normr0 << std::endl;
-#endif
+
     MPI_Barrier(MPI_COMM_WORLD);
     if (A.geom->rank==0) {
       HPCG_fout << ">>> End of Iteration "<< k << " (max " << max_iter << ")   Scaled Residual = "<< normr/normr0 << std::endl;
     }
+#endif
     MPI_Barrier(MPI_COMM_WORLD);
     niters = k;
   }
