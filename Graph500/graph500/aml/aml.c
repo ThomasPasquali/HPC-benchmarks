@@ -453,7 +453,7 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 		sprintf(host_name + namelen, "_%d", myproc);
 		namelen = strlen(host_name);
 	#endif
-	CCUTILS_MPI_SECTION_DEF(node_names, "Processed node names")
+	CCUTILS_MPI_SECTION_DEF(node_names, "Processes node names")
 	CCUTILS_MPI_ALL_PRINT_NAMED(node_names, fprintf(fp, "%s\n", host_name);)
 	CCUTILS_MPI_SECTION_END(node_names)
 

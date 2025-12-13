@@ -105,6 +105,13 @@ int main(int argc, char * argv[]) {
 
   HPCG_Init(&argc, &argv, params);
 
+  char host_name[MPI_MAX_PROCESSOR_NAME];
+	int namelen;
+	MPI_Get_processor_name(host_name,&namelen);
+	CCUTILS_MPI_SECTION_DEF(node_names, "Processes node names")
+	CCUTILS_MPI_ALL_PRINT_NAMED(node_names, fprintf(fp, "%s\n", host_name);)
+	CCUTILS_MPI_SECTION_END(node_names)
+
   // Check if QuickPath option is enabled.
   // If the running time is set to zero, we minimize all paths through the program
   bool quickPath = (params.runningTime==0);

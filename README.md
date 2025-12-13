@@ -19,6 +19,7 @@ This repository gathers HPC benchmarks:
 - HPL (2 hours)
 - HPCG (HAICGU)
     - 2 nodes, 128x128x128 grid, min runtime 30s , ~5min
+    - 4 nodes, 128x128x128 grid, min runtime 30s , ~5min
 - DNNProxies (15 min)
 
 *Estimated runtimes refer to experiments up to 8 nodes on a single partition*
