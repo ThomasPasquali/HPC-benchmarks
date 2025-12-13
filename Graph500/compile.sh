@@ -4,7 +4,7 @@ set -e
 
 # HAICGU modules: ml GCC/14.1.0 OpenMPI/5.0.3
 # Leonardo modules: ml gcc/12.2.0 openmpi/4.1.6--gcc--12.2.0-cuda-12.2 cmake/3.27.9
-# Nanjing: exoprt PATH="/root/hpc/build/gcc/bin:/root/hpc/build/bin:$PATH"; export LD_LIBRARY_PATH="/root/hpc/build/gcc/lib64:/root/hpc/build/lib:$LD_LIBRARY_PATH"
+# Nanjing: export PATH="/root/hpc/build/gcc/bin:/root/hpc/build/bin:$PATH"; export LD_LIBRARY_PATH="/root/hpc/build/gcc/lib64:/root/hpc/build/lib:$LD_LIBRARY_PATH"
 
 cd graph500
 if [[ ! -L ccutils ]]; then

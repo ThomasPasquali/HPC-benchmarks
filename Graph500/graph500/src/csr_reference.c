@@ -124,6 +124,7 @@ void convert_graph_to_oned_csr(const tuple_graph* const tg, oned_csr_graph* cons
 	aml_long_allmax(&maxlocaledges);
 	long averageedges = totaledges/num_pes();
 	double disbalance = (double)(maxlocaledges-minlocaledges)/(double)averageedges * 100.0;
+	CCUTILS_MPI_INIT
 	CCUTILS_MPI_SECTION_DEF(graph_stats, "Statistics on Generated Graph")
 	CCUTILS_MPI_PRINTF_ONCE(
 		"vertices:%ld\nedges:%ld\nisolated:%ld\nmaxdeg:%ld\nmaxlocaledges:%ld\nminlocaledges:%ld\navglocaledges:%ld\n(max-min)/avg*100: %3.2f\n",

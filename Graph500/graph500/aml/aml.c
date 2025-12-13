@@ -437,6 +437,7 @@ SOATTR int aml_init( int *argc, char ***argv ) {
 	int r, i, j,tmpmax;
 
 	r = MPI_Init(argc, argv);
+	CCUTILS_MPI_INIT
 	if ( r != MPI_SUCCESS ) return r;
 
 	MPI_Comm_size( MPI_COMM_WORLD, &num_procs );

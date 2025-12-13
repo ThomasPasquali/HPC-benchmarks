@@ -92,6 +92,7 @@ void get_statistics(const double x[], int n, volatile double r[s_LAST]) {
 
 int main(int argc, char** argv) {
 	aml_init(&argc,&argv); //includes MPI_Init inside
+	CCUTILS_MPI_INIT
 	setup_globals();
 
 	// Custom

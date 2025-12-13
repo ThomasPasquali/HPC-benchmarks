@@ -98,6 +98,7 @@ int main(int argc, char * argv[]) {
 
 #ifndef HPCG_NO_MPI
   MPI_Init(&argc, &argv);
+  CCUTILS_MPI_INIT
 #endif
 
   HPCG_Params params;
