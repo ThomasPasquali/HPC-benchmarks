@@ -474,9 +474,9 @@ int main(int argc, char * argv[]) {
   ////////////////////
 
   // Report results to YAML file
-  CCUTILS_SECTION_DEF(hpcg_output, "Classic HPCG benchmark output")
+  CCUTILS_MPI_SECTION_DEF(hpcg_output, "Classic HPCG benchmark output")
   ReportResults(A, numberOfMgLevels, numberOfCgSets, refMaxIters, optMaxIters, &times[0], testcg_data, testsymmetry_data, testnorms_data, global_failure, quickPath);
-  CCUTILS_SECTION_END(hpcg_output)
+  CCUTILS_MPI_SECTION_END(hpcg_output)
   
   PRINT_SEP("Cleanup")
   // Clean up

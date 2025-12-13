@@ -1,16 +1,3 @@
-import itertools
-from pathlib import Path
-import matplotlib.pyplot as plt
-
-# Paths
-OUT_DIR = Path('results')
-
-# Default font sizes
-FONT_TITLE = 38
-FONT_AXES = 28
-FONT_TICKS = 20
-FONT_LEGEND = 16
-
 # Name maps
 BOARD_NAMES_MAP = {
   'brah': 'AMD EPYC 7742',
@@ -54,11 +41,3 @@ PARTITION_NAMES_MAP = {
   'other': 'other',
 }
 
-# Plots style
-MARKERS_LIST = ["o", "s", "^", "d", "x", "P", "*", "v", ">"]
-COLORS_LIST = list(plt.rcParams['axes.prop_cycle'].by_key()['color'])
-COLORS_CYCLE = itertools.cycle(COLORS_LIST)
-LINESTYLES_LIST = ["-", ":", "-.", "--"]
-LINESTYLES_CYCLE = itertools.cycle(LINESTYLES_LIST)
-
-SET_FIG_TITLE = False

@@ -279,6 +279,12 @@ def main():
                     "gcc/12.2.0",
                     "openmpi/4.1.6--gcc--12.2.0-cuda-12.2"
                 ],
+                env=[
+                    "OMP_PROC_BIND=true",
+                    "OMP_NUM_THREADS=32",
+                    "NCCL_IB_SL=1",
+                    "UCX_IB_SL=1",
+                ],
                 # custom_headers=[
                 #     "#SBATCH --mail-type=END",
                 #     "#SBATCH --mail-user=thomas.pasquali@unitn.it"
