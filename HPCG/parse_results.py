@@ -237,17 +237,88 @@ def parse_job(j: sbm.Job) -> Tuple[Dict[Any, Any], pd.DataFrame]:
   
 
 def main():
-  jobs = sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=False)
-  print(f"jobs[0]: {jobs[0]}")
-  meta_df_pairs = [parse_job(j) for j in jobs]
-  out_file = OUT_DIR / f'hpcg_{sbm.get_cluster_name()}_data.parquet'
-  # print(meta_df_pairs[0][1]["spmv_halo"])
-  # print(meta_df_pairs[0][1]["dotp"])
-  # print(meta_df_pairs[0][1]["waxpby"])
-  # print(meta_df_pairs[0][1]["cg_times"])
-  # print(meta_df_pairs[0][1]["mg"])
-  # print(meta_df_pairs[0][1]["halo_precond"])
-  import_export.write_multiple_to_parquet(meta_df_pairs, out_file)
+    jobs = sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=False)
+    print(f"jobs[0]: {jobs[0]}")
+    meta_df_pairs = [parse_job(j) for j in jobs]
+    out_file = OUT_DIR / f'hpcg_{sbm.get_cluster_name()}_data.parquet'
+    
+    # Print original data
+    print("\n=== ORIGINAL DATA (before write) ===")
+    print(f"Number of jobs: {len(meta_df_pairs)}")
+    print(f"\nFirst job metadata: {meta_df_pairs[0][0]}")
+    print(f"\nDataframe keys: {list(meta_df_pairs[0][1].keys())}")
+    for df_name, df in meta_df_pairs[0][1].items():
+        print(f"\n{df_name} shape: {df.shape}")
+        print(df.head())
+    
+    # Write to parquet
+    import_export.write_multiple_to_parquet(meta_df_pairs, out_file)
+    
+    # Read back from parquet
+    import_exported, metadata_df = import_export.read_multiple_from_parquet(out_file)
+    
+  #   # Print imported data #FIXME: remove this part, it was just to test the import/export
+  #   print("\n=== IMPORTED DATA (after read) ===")
+  #   print(f"Number of jobs: {len(import_exported)}")
+  #   print(f"\nFirst job metadata: {import_exported[0][0]}")
+  #   print(f"\nDataframe keys: {list(import_exported[0][1].keys())}")
+  #   for df_name, df in import_exported[0][1].items():
+  #       print(f"\n{df_name} shape: {df.shape}")
+  #       print(df.head())
+    
+  #   # Verify metadata DataFrame
+  #   if metadata_df is not None:
+  #       print("\n=== METADATA DATAFRAME ===")
+  #       print(metadata_df)
+    
+  #   # Test equality
+  #   print("\n=== VERIFICATION ===")
+  #   print(f"Same number of jobs: {len(meta_df_pairs) == len(import_exported)}")
+  #   print(f"First metadata matches: {meta_df_pairs[0][0] == import_exported[0][0]}")
+  #   for df_name in meta_df_pairs[0][1].keys():
+  #       original = meta_df_pairs[0][1][df_name]
+  #       imported = import_exported[0][1][df_name]
+  #       matches = original.equals(imported)
+  #       print(f"{df_name} DataFrames match: {matches}")
+  #       if not matches:
+  #           print(f"  Original shape: {original.shape}, Imported shape: {imported.shape}")
+    
+  #   # ADD THE DEBUGGING CODE HERE:
+  #   print("\n=== DETAILED COMPARISON ===")
+  #   for df_name in ["spmv_halo", "halo_precond"]:
+  #       original = meta_df_pairs[0][1][df_name]
+  #       imported = import_exported[0][1][df_name]
+        
+  #       print(f"\n{df_name}:")
+  #       print(f"  Columns match: {list(original.columns) == list(imported.columns)}")
+  #       print(f"  Original columns: {list(original.columns)}")
+  #       print(f"  Imported columns: {list(imported.columns)}")
+  #       print(f"  Dtypes match: {(original.dtypes == imported.dtypes).all()}")
+  #       print(f"  Original dtypes:\n{original.dtypes}")
+  #       print(f"  Imported dtypes:\n{imported.dtypes}")
+        
+  #       # Check for NaN differences
+  #       print(f"  Original NaN count:\n{original.isna().sum()}")
+  #       print(f"  Imported NaN count:\n{imported.isna().sum()}")
+        
+  #       # Check first few rows
+  #       print(f"  Original head:\n{original.head()}")
+  #       print(f"  Imported head:\n{imported.head()}")
+  # # ADD THIS NEW SECTION HERE:
+  #   print("\n=== LIST COMPARISON ===")
+  #   for df_name in ["spmv_halo", "halo_precond"]:
+  #       original = meta_df_pairs[0][1][df_name]
+  #       imported = import_exported[0][1][df_name]
+        
+  #       print(f"\n{df_name}:")
+  #       # Check if the lists are actually equal
+  #       for idx in range(min(5, len(original))):
+  #           orig_list = original.iloc[idx]['halo_msg_size_bytes']
+  #           imp_list = imported.iloc[idx]['halo_msg_size_bytes']
+  #           print(f"  Row {idx}: {orig_list} == {imp_list} -> {orig_list == imp_list}")
+  #           print(f"    Type: original={type(orig_list)}, imported={type(imp_list)}")
+  #           if isinstance(orig_list, list) and isinstance(imp_list, list):
+  #               print(f"    List contents equal: {orig_list == imp_list}")
   
   # rows = []
   # for fname in files:
