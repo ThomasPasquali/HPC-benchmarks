@@ -11,7 +11,7 @@ import sbatchman as sbm
 from metrics import METRICS_TO_EXTRACT
 
 sys.path.append(str(Path(__file__).parent.parent))
-import ccutils.parser.ccutils_parser as ccutils_parser
+import ccutils.ccutils_parser as ccutils_parser
 import py_utils.import_export as import_export
 from py_utils.utils.utils import raise_none, dict_get
 
@@ -127,43 +127,89 @@ def collect_metrics(parsed: dict) -> dict:
 
   return out
 
-def extract_metrics_df(dp_section) -> pd.DataFrame:
-  """
-  Each row corresponds to one rank x iteration x measurement.
-  Handles metrics with different lengths safely.
-  """
-  rows = []
-  rank_outputs = dp_section.mpi_all_prints["ccutils_rank_json"].rank_outputs
-
-  for rank, json_str in rank_outputs.items():
-    parsed = json.loads(json_str)
-
-    for iter_key in sorted(parsed.keys(), key=int):
-      iter_data = parsed[iter_key]
-
-      # Determine the maximum number of measurements among list metrics
-      list_metrics = ["dotp", "dotp_allreduce", "exchange_halo", "halo_kernels", "halo_msg_sizes"]
-      n = max(len(iter_data.get(m, [])) for m in list_metrics)
-      n = max(n, 1)  # ensure at least one row
-
-      for idx in range(n):
-        row = {
-          "rank": rank,
-          "iteration": int(iter_key),
-          "cg_time": iter_data.get("cg_time", [None])[0],
-          "dotp": iter_data.get("dotp", [None]*n)[idx] if idx < len(iter_data.get("dotp", [])) else None,
-          "dotp_allreduce": iter_data.get("dotp_allreduce", [None]*n)[idx] if idx < len(iter_data.get("dotp_allreduce", [])) else None,
-          "spmv": iter_data.get("spmv", [None]*n)[idx] if "spmv" in iter_data and idx < len(iter_data.get("spmv", [])) else None,
-          "mg": iter_data.get("mg", [None]*n)[idx] if "mg" in iter_data and idx < len(iter_data.get("mg", [])) else None,
-          "waxpby": iter_data.get("waxpby", [None]*n)[idx] if "waxpby" in iter_data and idx < len(iter_data.get("waxpby", [])) else None,
-          "exchange_halo": iter_data.get("exchange_halo", [None]*n)[idx] if idx < len(iter_data.get("exchange_halo", [])) else None,
-          "halo_kernels": iter_data.get("halo_kernels", [None]*n)[idx] if idx < len(iter_data.get("halo_kernels", [])) else None,
-          "halo_msg_size_bytes": iter_data.get("halo_msg_sizes", [None]*n)[idx] if idx < len(iter_data.get("halo_msg_sizes", [])) else None,
-        }
-        rows.append(row)
-
-  return pd.DataFrame(rows)
-
+def extract_metrics_dict(dp_section):
+    dfs = {
+        "dotp": [],
+        "spmv_halo": [],
+        "waxpby": [],
+        "cg_times": [],
+        "mg": [],
+        "halo_precond": []
+    }
+    
+    rank_outputs = dp_section.mpi_all_prints["ccutils_rank_json"].rank_outputs
+    for rank, json_str in rank_outputs.items():
+        parsed = json.loads(json_str)
+        for iter_key in sorted(parsed.keys(), key=int):
+            iter_data = parsed[iter_key]
+            spmv_list = iter_data.get("spmv", [])
+            halo_kernels = iter_data.get("halo_kernels", [])
+            exchange_halo_list = iter_data.get("exchange_halo", [])
+            halo_msg_sizes = iter_data.get("halo_msg_sizes", [])
+            
+            max_len = max(
+                len(iter_data.get("dotp", [])),
+                len(iter_data.get("dotp_allreduce", [])),
+                len(iter_data.get("waxpby", [])),
+                len(iter_data.get("mg", [])),
+                1
+            )
+            # DOTP
+            for idx in range(max_len):
+                dfs["dotp"].append({
+                    "rank": rank,
+                    "iteration": int(iter_key),
+                    "dotp": iter_data.get("dotp", [None]*max_len)[idx] if idx < len(iter_data.get("dotp", [])) else None,
+                    "dotp_allreduce": iter_data.get("dotp_allreduce", [None]*max_len)[idx] if idx < len(iter_data.get("dotp_allreduce", [])) else None
+                })
+            # SPMV + HALO (only halo_kernel == "SPMV")
+            spmv_counter = 0
+            for halo_idx, kernel in enumerate(halo_kernels):
+                if kernel == "SPMV":
+                    dfs["spmv_halo"].append({
+                        "rank": rank,
+                        "iteration": int(iter_key),
+                        "spmv": spmv_list[spmv_counter] if spmv_counter < len(spmv_list) else None,
+                        "exchange_halo": exchange_halo_list[halo_idx] if halo_idx < len(exchange_halo_list) else None,
+                        "halo_msg_size_bytes": halo_msg_sizes[halo_idx] if halo_idx < len(halo_msg_sizes) else None
+                    })
+                    spmv_counter += 1
+            # MG (standalone)
+            mg_list = iter_data.get("mg", [])
+            for idx, val in enumerate(mg_list):
+                dfs["mg"].append({
+                    "rank": rank,
+                    "iteration": int(iter_key),
+                    "mg": val
+                })
+            # HALO (preconditioning only)
+            for halo_idx, kernel in enumerate(halo_kernels):
+                if kernel and "preconditioning_" in str(kernel):
+                    dfs["halo_precond"].append({
+                        "rank": rank,
+                        "iteration": int(iter_key),
+                        "exchange_halo": exchange_halo_list[halo_idx] if halo_idx < len(exchange_halo_list) else None,
+                        "halo_msg_size_bytes": halo_msg_sizes[halo_idx] if halo_idx < len(halo_msg_sizes) else None
+                    })
+            # WAXPBY
+            waxpby_list = iter_data.get("waxpby", [])
+            for idx, val in enumerate(waxpby_list):
+                dfs["waxpby"].append({
+                    "rank": rank,
+                    "iteration": int(iter_key),
+                    "waxpby": val
+                })
+            # CG TIMES (one row per rank x iteration)
+            dfs["cg_times"].append({
+                "rank": rank,
+                "iteration": int(iter_key),
+                "cg_times": iter_data.get("cg_times", [None])[0]
+            })
+    # Convert lists to DataFrames
+    for key in dfs:
+        dfs[key] = pd.DataFrame(dfs[key]).reset_index(drop=True)
+    
+    return dfs
 def parse_job(j: sbm.Job) -> Tuple[Dict[Any, Any], pd.DataFrame]:
   stdout = raise_none(j.get_stdout(), "stdout")
   res = ccutils_parser.parse_ccutils_output(stdout)
@@ -187,19 +233,20 @@ def parse_job(j: sbm.Job) -> Tuple[Dict[Any, Any], pd.DataFrame]:
   for k in hpcg_metrics_keys:
     meta[k] = dict_get(hpcg_metrics, k)
   
-  return meta, extract_metrics_df(cg_section)
+  return meta, extract_metrics_dict(cg_section)
   
 
 def main():
   jobs = sbm.jobs_list(status=[sbm.Status.COMPLETED], from_active=True, from_archived=False)
-
+  print(f"jobs[0]: {jobs[0]}")
   meta_df_pairs = [parse_job(j) for j in jobs]
   out_file = OUT_DIR / f'hpcg_{sbm.get_cluster_name()}_data.parquet'
-  for meta, df in meta_df_pairs[:1]:
-    print('-'*50)
-    print(meta)
-    print(df)
-    df.to_csv('test_res.csv')
+  # print(meta_df_pairs[0][1]["spmv_halo"])
+  # print(meta_df_pairs[0][1]["dotp"])
+  # print(meta_df_pairs[0][1]["waxpby"])
+  # print(meta_df_pairs[0][1]["cg_times"])
+  # print(meta_df_pairs[0][1]["mg"])
+  # print(meta_df_pairs[0][1]["halo_precond"])
   import_export.write_multiple_to_parquet(meta_df_pairs, out_file)
   
   # rows = []
