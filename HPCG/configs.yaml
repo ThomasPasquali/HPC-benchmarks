@@ -32,7 +32,7 @@ leonardo:
   scheduler: slurm
 
   default_conf:
-    account: "IscrC_OMG-25"
+    account: "try25_HNS"
     cpus_per_task: 32
     gpus: 0
     time: "00:05:00"
@@ -46,7 +46,7 @@ leonardo:
       - "OMP_NUM_THREADS=32"
 
   configs:
-    - name: "leonardo_{nodes}nodes"
+    - name: "boost_usr_prod_{nodes}nodes"
       nodes: "{nodes}"
       ntasks: "{nodes}"
 

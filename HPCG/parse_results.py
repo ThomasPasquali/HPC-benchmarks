@@ -167,7 +167,7 @@ def extract_metrics_dict(dp_section) -> Dict[str, pd.DataFrame]:
                 dfs["dotp"].append(
                     {
                         "rank": rank,
-                        "iteration": int(iter_key),
+                        "run": int(iter_key),
                         "dotp": (
                             iter_data.get("dotp", [None] * max_len)[idx]
                             if idx < len(iter_data.get("dotp", []))
@@ -187,7 +187,7 @@ def extract_metrics_dict(dp_section) -> Dict[str, pd.DataFrame]:
                     dfs["spmv_halo"].append(
                         {
                             "rank": rank,
-                            "iteration": int(iter_key),
+                            "run": int(iter_key),
                             "spmv": (
                                 spmv_list[spmv_counter]
                                 if spmv_counter < len(spmv_list)
@@ -209,14 +209,14 @@ def extract_metrics_dict(dp_section) -> Dict[str, pd.DataFrame]:
             # MG (standalone)
             mg_list = iter_data.get("mg", [])
             for idx, val in enumerate(mg_list):
-                dfs["mg"].append({"rank": rank, "iteration": int(iter_key), "mg": val})
+                dfs["mg"].append({"rank": rank, "run": int(iter_key), "mg": val})
             # HALO (preconditioning only)
             for halo_idx, kernel in enumerate(halo_kernels):
                 if kernel and "preconditioning_" in str(kernel):
                     dfs["halo_precond"].append(
                         {
                             "rank": rank,
-                            "iteration": int(iter_key),
+                            "run": int(iter_key),
                             "exchange_halo": (
                                 exchange_halo_list[halo_idx]
                                 if halo_idx < len(exchange_halo_list)
@@ -233,13 +233,13 @@ def extract_metrics_dict(dp_section) -> Dict[str, pd.DataFrame]:
             waxpby_list = iter_data.get("waxpby", [])
             for idx, val in enumerate(waxpby_list):
                 dfs["waxpby"].append(
-                    {"rank": rank, "iteration": int(iter_key), "waxpby": val}
+                    {"rank": rank, "run": int(iter_key), "waxpby": val}
                 )
-            # CG TIMES (one row per rank x iteration)
+            # CG TIMES (one row per rank x run)
             dfs["cg_times"].append(
                 {
                     "rank": rank,
-                    "iteration": int(iter_key),
+                    "run": int(iter_key),
                     "cg_times": iter_data.get("cg_times", [None])[0],
                 }
             )
