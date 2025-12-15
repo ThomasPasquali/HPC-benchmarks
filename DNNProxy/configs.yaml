@@ -49,7 +49,7 @@ leonardo:
       - "openmpi/4.1.6--gcc--12.2.0-cuda-12.2"
 
   configs:
-    - name: "boost__usr_prod_{nodes}nodes"
+    - name: "boost_usr_prod_{nodes}nodes"
       partition: "boost_usr_prod"
       nodes: "{nodes}"
       ntasks: "{nodes}"

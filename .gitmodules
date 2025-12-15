@@ -10,3 +10,6 @@
 [submodule "ccutils"]
 	path = ccutils
 	url = git@github.com:ThomasPasquali/ccutils.git
+[submodule "DNNProxy/DNNProxy"]
+	path = DNNProxy/DNNProxy
+	url = git@github.com:HicrestLaboratory/DNNProxy.git
