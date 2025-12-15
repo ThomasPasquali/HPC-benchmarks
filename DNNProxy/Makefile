@@ -1,28 +1,33 @@
-MPICXX = mpicxx
+WITH_MPI ?= 1
 
-BASE_PATH = DNN-cpp-proxies/proxies
+CXX := mpicxx
+CXXFLAGS := -O3 -Wall -std=c++17
 
-all: gpt2 bert resnet50 resnet152 gpt3 dlrm
+ifndef CCUTILS_INCLUDE
+$(warning CCUTILS_INCLUDE is not set!)
+$(warning Please set CCUTILS_INCLUDE to the include directory of ccutils)
+$(error Example: install by running the provided install.sh)
+endif
 
-# Communication only
-gpt2:
-	$(MPICXX) $(BASE_PATH)/comm_only/gpt2_large.cpp -o $@
+CXXFLAGS += -I$(CCUTILS_INCLUDE)
 
-resnet50:
-	$(MPICXX) $(BASE_PATH)/comm_only/resnet50.cpp -o $@
+ifeq ($(WITH_MPI),1)
+    MPI_CFLAGS := $(shell mpicxx --showme:compile)
+    MPI_LIBS   := $(shell mpicxx --showme:link)
+    CXXFLAGS  += $(MPI_CFLAGS) -DWITH_MPI -DCCUTILS_ENABLE_MPI
+endif
 
-bert:
-	$(MPICXX) $(BASE_PATH)/comm_only/bert_large.cpp -o $@
+DP_PATH = ./DNNProxy/cpp/data_parallel
 
-# Emulated computed (using sleep)
-resnet152:
-	$(MPICXX) $(BASE_PATH)/resnet152.cpp -o $@
+all: data_parallel
 
-gpt3:
-	$(MPICXX) $(BASE_PATH)/gpt3.cpp -o $@
+data_parallel: dp fsdp
 
-dlrm:
-	$(MPICXX) $(BASE_PATH)/dlrm.cpp -o $@
+dp:
+	$(CXX) $(CXXFLAGS) $(MPI_LIBS) -o dp $(DP_PATH)/dp.cpp
+
+fsdp:
+	$(CXX) $(CXXFLAGS) $(MPI_LIBS) -o fsdp $(DP_PATH)/fsdp.cpp
 
 clean:
-	rm gpt2 bert resnet50 resnet152 gpt3 dlrm
+	rm -f dp fsdp
