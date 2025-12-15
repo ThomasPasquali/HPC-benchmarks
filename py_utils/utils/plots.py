@@ -1,6 +1,6 @@
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 from matplotlib.patches import Rectangle
-from ..constants import LINESTYLES_LIST, COLORS_LIST, MARKERS_LIST
+from ..constants.plots import LINESTYLES_LIST, COLORS_LIST, MARKERS_LIST
 import itertools
 
 def add_zoom_inset(
