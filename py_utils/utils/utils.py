@@ -23,7 +23,7 @@ def query_meta_df_dict_pairs(
     for meta, df_dict in meta_df_dict_pairs:
         ok = True
         for filter_key, filter_val in meta_filters:
-            if meta[filter_key] != filter_val[filter_val]:
+            if meta[filter_key] != filter_val:
                 ok = False
                 break
         if ok:

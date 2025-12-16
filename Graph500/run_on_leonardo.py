@@ -10,7 +10,7 @@ sys.path.append(str(Path(__file__).parent.parent / 'machines' / 'Leonardo'))
 from nodelists_generator import LeonardoNodelistGenerator, SlurmResources, TopologyConstraint, PARTITION_NAME_MAP
 
 NODES=[1, 2, 4, 8, 16]
-PARTITION = 1
+PARTITION = 'boost_usr_prod'
 MAX_CANDIDATES = 1000
 
 NODELIST_TYPE_EMULATING_NANJING = 'emulating_nanjing'

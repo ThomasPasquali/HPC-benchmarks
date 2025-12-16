@@ -280,14 +280,14 @@ def read_multiple_from_parquet(
                 # Fallback if no _df_name column exists (shouldn't happen with new format)
                 df_dict["default"] = subset_df
 
-            # Use hashable tuple for duplicate checking
-            key_tuple = tuple(sorted(meta.items()))
-            if key_tuple in seen_keys:
+            # Use hashable string for duplicate checking
+            key_str = json.dumps(meta, sort_keys=True)
+            if key_str in seen_keys:
                 warnings.warn(
                     f"Duplicate metadata found in {path}: {meta}. Keeping first occurrence."
                 )
                 continue
-            seen_keys.add(key_tuple)
+            seen_keys.add(key_str)
             combined_result.append((meta, df_dict))
             metadata_records.append(meta)
 
@@ -295,12 +295,16 @@ def read_multiple_from_parquet(
     metadata_df = None
     if metadata_records:
         keys = set(metadata_records[0].keys())
-        scalar_only = all(
-            set(d.keys()) == keys
-            and all(not isinstance(v, (dict, list)) for v in d.values())
-            for d in metadata_records
-        )
-        if scalar_only:
-            metadata_df = pd.DataFrame(metadata_records)
+        same_keys = all(set(d.keys()) == keys for d in metadata_records)
+
+        if same_keys:
+            serialized_records = []
+            for d in metadata_records:
+                serialized_records.append({
+                    k: json.dumps(v) if isinstance(v, (dict, list)) else v
+                    for k, v in d.items()
+                })
+
+            metadata_df = pd.DataFrame(serialized_records)
 
     return combined_result, metadata_df

@@ -10,12 +10,9 @@ Generates scaling plots comparing clusters and partitions.
 
 import argparse
 import sys
-from typing import Any, Dict, List, Tuple
 import warnings
-import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
-import seaborn as sns
 import numpy as np
 
 sys.path.append(str(Path(__file__).parent.parent))
