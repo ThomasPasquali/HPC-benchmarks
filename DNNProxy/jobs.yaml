@@ -5,7 +5,8 @@ variables:
   models_dp: ['vit_b_16_32', 'vit_b_16_128', 'vit_l_16_32', 'vit_l_16_128', 'vit_h_16_32', 'vit_h_16_128']
   num_buckets: [8, 32, 128]
   base_path: ["HPC-benchmarks/DNNProxy/DNNProxy"]
-  #models_fsdp: ['gpt2_l_128', 'gpt2_xl_128']
+  #models_fsdp: ['gpt2_l_128']
+  num_units: [4, 6, 8]
 
   # partition: ["boost_usr_prod"] # Leonardo
   partition: ["eth", "ib"] # HAICGU
@@ -16,5 +17,5 @@ jobs:
       - tag: "dp_{partition}_{nodes}nodes"
         command: "mpirun -np {nodes} dp {models_dp} {num_buckets} {base_path}"
         #- tag: "fsdp_{partition}_{nodes}nodes"
-        #command: "mpirun -np {nodes} cpp/data_parallel/fsdp {models_fsdp} {nodes} {nodes} true"
+        #command: "mpirun -np {nodes} fsdp {models_fsdp} {num_units} {nodes} {base_path}"
 
