@@ -1,6 +1,6 @@
 variables:
   partition: ["ib", "eth"]
-  nodes: [2, 4, 6, 8]
+  nodes: [1, 2, 4, 8]
 
 haicgu:
   scheduler: slurm
