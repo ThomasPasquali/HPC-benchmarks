@@ -1,4 +1,5 @@
 .vscode
+.venv
 
 haicgu_source.sh
 
