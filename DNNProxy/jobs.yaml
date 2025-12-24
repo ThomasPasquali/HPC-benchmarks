@@ -1,4 +1,4 @@
-sequential: true
+sequential: false
 
 variables:
   nodes: [1, 2, 4, 8]
@@ -7,8 +7,8 @@ variables:
   base_path: ["HPC-benchmarks/DNNProxy/DNNProxy"]
   #models_fsdp: ['gpt2_l_128', 'gpt2_xl_128']
 
-  # partition: ["boost_usr_prod"] # Leonardo
-  partition: ["eth", "ib"] # HAICGU
+  partition: ["boost_usr_prod"] # Leonardo
+  #partition: ["eth", "ib"] # HAICGU
 
 jobs:
   - config: "{partition}_{nodes}nodes"
