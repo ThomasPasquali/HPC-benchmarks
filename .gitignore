@@ -29,3 +29,5 @@ Graph500/graph500/src/build
 
 HPL/hpl/
 HPL/HPL.dat
+
+squeue_monitor/**.csv

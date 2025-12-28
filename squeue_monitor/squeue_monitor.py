@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-SLURM Queue Monitor - Periodically runs squeue and logs only NEW jobs in CSV format
+SLURM Queue Monitor - Periodically runs squeue and logs ALL jobs with snapshot ID
 """
 import subprocess
 import time
@@ -55,7 +55,7 @@ def parse_squeue_output(output, delimiter="|"):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Monitor SLURM queue and log ONLY NEW jobs in CSV format"
+        description="Monitor SLURM queue and log ALL jobs at each iteration with snapshot ID"
     )
     parser.add_argument(
         "-i", "--interval",
@@ -83,10 +83,10 @@ def main():
     args = parser.parse_args()
     
     output_file = Path(args.output)
-    seen_jobids = set()
     file_initialized = False
+    squeue_id = 0
     
-    print(f"Starting SLURM queue monitor (tracking NEW jobs only)...")
+    print(f"Starting SLURM queue monitor (logging ALL jobs at each iteration)...")
     print(f"Interval: {args.interval} seconds")
     print(f"Output file: {output_file}")
     if args.format:
@@ -98,28 +98,26 @@ def main():
             current_output = run_squeue(args.format)
             
             if current_output:
+                squeue_id += 1
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 rows = parse_squeue_output(current_output)
                 
-                # Filter to only NEW jobs
-                new_jobs = []
-                for row in rows:
-                    jobid = row.get('JOBID', row.get('JOBID', list(row.values())[0]))  # First column is usually JOBID
-                    if jobid not in seen_jobids:
-                        seen_jobids.add(jobid)
-                        new_jobs.append(row)
-                
-                # Write only new jobs to CSV
-                if new_jobs:
-                    # Add timestamp column if requested
-                    if args.add_timestamp:
-                        for row in new_jobs:
+                if rows:
+                    # Add squeue_id and timestamp to each row
+                    for row in rows:
+                        row['squeue_id'] = squeue_id
+                        if args.add_timestamp:
                             row['Timestamp'] = timestamp
+                    
+                    # Reorder so squeue_id is first
+                    fieldnames = ['squeue_id']
+                    if args.add_timestamp:
+                        fieldnames.append('Timestamp')
+                    fieldnames.extend([k for k in rows[0].keys() if k not in ['squeue_id', 'Timestamp']])
                     
                     # Write to CSV
                     mode = 'w' if not file_initialized else 'a'
                     with open(output_file, mode, newline='') as f:
-                        fieldnames = list(new_jobs[0].keys())
                         writer = csv.DictWriter(f, fieldnames=fieldnames)
                         
                         # Write header only once
@@ -127,15 +125,15 @@ def main():
                             writer.writeheader()
                             file_initialized = True
                         
-                        writer.writerows(new_jobs)
+                        writer.writerows(rows)
                     
-                    print(f"[{timestamp}] {len(new_jobs)} new job(s) logged")
+                    print(f"[{timestamp}] Snapshot {squeue_id}: {len(rows)} job(s) logged")
             
             time.sleep(args.interval)
             
     except KeyboardInterrupt:
         print(f"\n\nMonitoring stopped by user")
-        print(f"Total unique jobs tracked: {len(seen_jobids)}")
+        print(f"Total snapshots taken: {squeue_id}")
 
 
 if __name__ == "__main__":
