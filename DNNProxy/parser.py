@@ -48,6 +48,9 @@ def extract_fsdp_metrics_df(fsdp_section, job_vars):
         parsed = json.loads(json_str)
         runtimes = parsed.get("runtime", [])
         barriers = parsed.get("barrier", [])
+        hostname = parsed.get("hostname", "unknown")
+        allgather_wait_fwd_times = parsed.get("allgather_wait_fwd", [])
+        allgather_wait_bwd_times = parsed.get("allgather_wait_bwd", [])
         allgather_times = parsed.get("allgather", [])
         reduce_scatter_times = parsed.get("reduce_scatter", [])
         
@@ -59,8 +62,10 @@ def extract_fsdp_metrics_df(fsdp_section, job_vars):
             runtime_rows.append({
                 **global_params,
                 "rank": rank,
+                "hostname": hostname,
                 "run": run_idx,
                 "runtime": runtimes[run_idx],
+                "allgather": allgather_times[run_idx],
                 "barrier": barriers[run_idx] if run_idx < len(barriers) else 0
             })
 
@@ -73,14 +78,22 @@ def extract_fsdp_metrics_df(fsdp_section, job_vars):
                 comm_rows.append({
                     **global_params,
                     "rank": rank,
+                    "hostname": hostname,
                     "run": run_idx,
                     "unit_idx": unit_idx,
-                    "allgather": allgather_times[ag_idx] if ag_idx < len(allgather_times) else 0,
+                    "allgather_wait_fwd": allgather_wait_fwd_times[ag_idx] if ag_idx < len(allgather_wait_fwd_times) else 0,
+                    "allgather_wait_bwd": allgather_wait_bwd_times[ag_idx + 1] if (ag_idx + 1) < len(allgather_wait_bwd_times) else 0,
                     "reduce_scatter": reduce_scatter_times[rs_idx] if rs_idx < len(reduce_scatter_times) else 0
                 })
 
     runtime_df = pd.DataFrame(runtime_rows)
     comm_df = pd.DataFrame(comm_rows)
+
+    for k, v in global_params.items():
+        runtime_df[k] = v
+        comm_df[k] = v
+
+
     return runtime_df, comm_df
 
 

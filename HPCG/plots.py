@@ -188,6 +188,70 @@ def plot_kernel_runtime_breakdown(
     return ax
 
 
+def plot_precond_breakdown(experiments: dict, colors: dict, ax=None):
+    """
+    Preconditioner (MG) breakdown:
+      - For each MG iteration, calculate its 10 associated halo exchanges
+      - Bar shows mean MG time split into computation vs communication
+    """
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(8, 5))
+
+    cps = list(experiments.keys())
+    x = np.arange(len(cps))
+
+    for i, cp in enumerate(cps):
+        df_mg = experiments[cp]["mg"]
+        df_halo = experiments[cp]["halo_precond"]
+        
+        num_mg_iters = len(df_mg)
+        halo_per_mg = 10
+        
+        # For each MG iteration, calculate its communication overhead
+        mg_times = []
+        comm_times = []
+        comp_times = []
+        
+        for mg_idx in range(num_mg_iters):
+            mg_time = df_mg.iloc[mg_idx]["mg"]
+            
+            # Get the 10 halo exchanges for THIS MG iteration
+            start_idx = mg_idx * halo_per_mg
+            end_idx = start_idx + halo_per_mg
+            halo_sum = df_halo.iloc[start_idx:end_idx]["exchange_halo"].sum()
+            
+            mg_times.append(mg_time)
+            comm_times.append(halo_sum)
+            comp_times.append(mg_time - halo_sum)
+        
+        # Calculate means
+        mean_comm = np.mean(comm_times)
+        mean_comp = np.mean(comp_times)
+        comm_pct = 100 * mean_comm / (mean_comp + mean_comm) if (mean_comp + mean_comm) > 0 else 0
+        
+        # Stacked bar: computation + communication
+        ax.bar(i, mean_comp, width=0.1, color='steelblue', 
+               edgecolor='black', linewidth=0.5, 
+               label='Computation' if i == 0 else '')
+        ax.bar(i, mean_comm, width=0.1, bottom=mean_comp, 
+               color='coral', edgecolor='black', linewidth=0.5,
+               label='Communication' if i == 0 else '')
+        
+        # Annotate with communication percentage
+        if comm_pct > 3:  # Only show if visible
+            ax.text(i, mean_comp + mean_comm / 2, f'{comm_pct:.1f}%',
+                    ha='center', va='center', fontsize=10, 
+                    color='white', fontweight='bold')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(cps, rotation=30, ha="right")
+    ax.set_ylabel("Time (s)")
+    ax.set_title("Preconditioner Breakdown")
+    ax.legend(loc='upper left', fontsize=10)
+    ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+
+    return ax
+
 
 def plot_dotp_breakdown(
     experiments: dict,
@@ -398,6 +462,12 @@ def main():
     meta_dfs_pairs, meta_df = import_export.read_multiple_from_parquet(args.csv_files)
     import_export.describe_pairs_content(meta_dfs_pairs, verbose=True)
 
+    print(meta_dfs_pairs[0][1]['halo_precond'].head(20))
+    print(meta_dfs_pairs[0][1]['mg'].head(20))
+
+    print(len(meta_dfs_pairs[0][1]['halo_precond']))
+    print(len(meta_dfs_pairs[0][1]['mg']))
+ 
     if meta_df is None:
         raise Exception("meta_df is None")
 
@@ -517,6 +587,16 @@ def main():
         # fig.tight_layout()
         # fig.savefig(f"{prefix}_spmv_halo_breakdown.png", dpi=150)
         # plt.close(fig)
+
+        fig, ax = plt.subplots(figsize=(7, 4))
+        plot_precond_breakdown(
+            experiments=experiments,
+            colors=colors,
+            ax=ax,
+        )
+        fig.tight_layout()
+        fig.savefig(f"{prefix}_precond_breakdown.png", dpi=150)
+        plt.close(fig)
 
     print("\nAll plots generated successfully!")
 
