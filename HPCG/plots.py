@@ -12,6 +12,7 @@ import argparse
 import sys
 import warnings
 import matplotlib.pyplot as plt
+from matplotlib.colors import to_rgba
 from pathlib import Path
 import numpy as np
 
@@ -28,7 +29,7 @@ import py_utils.import_export as import_export
 
 plt.rc("axes", titlesize=FONT_AXES - 6)
 plt.rc("axes", labelsize=FONT_AXES - 6)
-plt.rc("xtick", labelsize=FONT_TICKS - 2)
+plt.rc("xtick", labelsize=FONT_TICKS - 4)
 plt.rc("ytick", labelsize=FONT_TICKS - 2)
 plt.rc("legend", fontsize=FONT_LEGEND - 4)
 plt.rc("figure", titlesize=FONT_TITLE)
@@ -195,7 +196,7 @@ def plot_precond_breakdown(experiments: dict, colors: dict, ax=None):
       - Bar shows mean MG time split into computation vs communication
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(8, 5))
+        fig, ax = plt.subplots(figsize=(4, 5))
 
     cps = list(experiments.keys())
     x = np.arange(len(cps))
@@ -230,10 +231,10 @@ def plot_precond_breakdown(experiments: dict, colors: dict, ax=None):
         comm_pct = 100 * mean_comm / (mean_comp + mean_comm) if (mean_comp + mean_comm) > 0 else 0
         
         # Stacked bar: computation + communication
-        ax.bar(i, mean_comp, width=0.1, color='steelblue', 
+        ax.bar(i, mean_comp, color='steelblue', 
                edgecolor='black', linewidth=0.5, 
                label='Computation' if i == 0 else '')
-        ax.bar(i, mean_comm, width=0.1, bottom=mean_comp, 
+        ax.bar(i, mean_comm, bottom=mean_comp, 
                color='coral', edgecolor='black', linewidth=0.5,
                label='Communication' if i == 0 else '')
         
@@ -243,130 +244,197 @@ def plot_precond_breakdown(experiments: dict, colors: dict, ax=None):
                     ha='center', va='center', fontsize=10, 
                     color='white', fontweight='bold')
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(cps, rotation=30, ha="right")
-    ax.set_ylabel("Time (s)")
-    ax.set_title("Preconditioner Breakdown")
-    ax.legend(loc='upper left', fontsize=10)
-    ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+        ax.set_xticks(x)
+        ax.set_xticklabels(cps, rotation=30, ha="right")
+        ax.set_ylabel("Time (s)")
+        # ax.set_title("Preconditioner Breakdown")
+        ax.legend(loc='best', fontsize=10)
+        ax.grid(True, axis='y', linestyle='--', alpha=0.3)
 
     return ax
 
+def _with_alpha(color, alpha):
+    r, g, b, _ = to_rgba(color)
+    return (r, g, b, alpha)
 
 def plot_dotp_breakdown(
     experiments: dict,
     colors: dict,
-    ax=None,
+    aggregate="sum",  # "mean" or "sum"
+    figsize=(6, 4),
 ):
-    """
-    dotp breakdown:
-      - gray bar: mean total dotp time ± std (per run)
-      - scatter: ALL recorded dotp_allreduce times
-        * color  -> cluster_partition
-        * marker -> run
-    """
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(7, 4))
-
     cps = list(experiments.keys())
-    x = np.arange(len(cps))
+    nsys = len(cps)
 
-    # collect all runs across all systems
-    all_runs = sorted({
-        r
-        for cp in cps
-        for r in experiments[cp]["dotp"]["run"].unique()
-    })
+    fig, axes = plt.subplots(
+        1, nsys, figsize=figsize, sharey=True, squeeze=False
+    )
+    axes = axes[0]
 
-    marker_map = create_marker_map(all_runs)
+    for ax, cp in zip(axes, cps):
+        if cp not in colors:
+            raise KeyError(f"Missing color for system '{cp}'")
 
-    legend_handles = {}
+        base_color = colors[cp]
+        df = experiments[cp]["dotp"].copy()
 
-    for i, cp in enumerate(cps):
-        df = experiments[cp]["dotp"]
+        # ---- sort by rank, then dotp
+        df = df.sort_values(["rank", "dotp"])
 
-        mean = df["dotp"].mean()
-        std = df["dotp"].std()
-        vmin = df["dotp"].min()
-        vmax = df["dotp"].max()
+        # ---- aggregate per rank
+        if aggregate == "mean":
+            agg = df.groupby("rank", as_index=False).mean(numeric_only=True)
+        elif aggregate == "sum":
+            agg = df.groupby("rank", as_index=False).sum(numeric_only=True)
+        else:
+            raise ValueError("aggregate must be 'mean' or 'sum'")
 
-        # --- mean bar
+        ranks = agg["rank"].values
+        dotp = agg["dotp"].values
+        allr = agg["dotp_allreduce"].values
+
+        compute = np.clip(dotp - allr, 0.0, None)
+        x = np.arange(len(ranks))
+
+        # ---- stacked bars
         ax.bar(
-            i,
-            mean,
-            color="lightgray",
-            edgecolor="black",
-            width=0.6,
-            zorder=1,
+            x,
+            compute,
+            bottom=allr,
+            color=_with_alpha(base_color, 0.45),
+            label="Compute",
+        )
+        ax.bar(
+            x,
+            allr,
+            color=_with_alpha(base_color, 0.85),
+            label="Allreduce",
         )
 
-        # --- min / max whiskers
-        ax.vlines(
-            i,
-            vmin,
-            vmax,
-            color="black",
-            linewidth=1.5,
-            zorder=2,
-        )
-        ax.hlines(
-            [vmin, vmax],
-            i - 0.08,
-            i + 0.08,
-            color="black",
-            linewidth=1.5,
-            zorder=2,
-        )
+        ax.set_title(cp, fontsize=14)
+        ax.set_xticks(x)
+        ax.set_xticklabels(ranks)
+        ax.set_xlabel("Rank")
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
 
-        # --- std (±1σ) as inner error bar
-        ax.errorbar(
-            i,
-            mean,
-            yerr=std,
-            fmt="none",
-            ecolor="dimgray",
-            elinewidth=3,
-            capsize=6,
-            zorder=3,
-        )
+        # ---- per-subplot legend
+        ax.legend(fontsize=10, loc="best", frameon=False)
 
-        # --- scatter: ALL dotp_allreduce samples
-        for run, sub in df.groupby("run"):
-            yvals = sub["dotp_allreduce"].values
-            jitter = (np.random.rand(len(yvals)) - 0.5) * 0.25
+    axes[0].set_ylabel("Time")
 
-            sc = ax.scatter(
-                np.full(len(yvals), i) + jitter,
-                yvals,
-                color=colors[cp],
-                marker=marker_map[run],
-                s=35,
-                zorder=2,
-                label=f"Run {run}",
-            )
+    return fig, axes
 
-            # one legend entry per run
-            if run not in legend_handles:
-                legend_handles[run] = sc
+# def plot_dotp_breakdown(
+#     experiments: dict,
+#     colors: dict,
+#     ax=None,
+# ):
+#     """
+#     dotp breakdown:
+#       - gray bar: mean total dotp time ± std (per run)
+#       - scatter: ALL recorded dotp_allreduce times
+#         * color  -> cluster_partition
+#         * marker -> run
+#     """
+#     if ax is None:
+#         fig, ax = plt.subplots(figsize=(7, 4))
 
-    ax.set_xticks(x)
-    ax.set_xticklabels(cps, rotation=30, ha="right")
-    ax.set_ylabel("Time")
-    ax.set_title("dotp runtime breakdown")
+#     cps = list(experiments.keys())
+#     x = np.arange(len(cps))
 
-    if len(all_runs) > 1:
-        ax.legend(
-            legend_handles.values(),
-            legend_handles.keys(),
-            title="Run",
-            fontsize=8,
-            loc="best",
-        )
+#     # collect all runs across all systems
+#     all_runs = sorted({
+#         r
+#         for cp in cps
+#         for r in experiments[cp]["dotp"]["run"].unique()
+#     })
 
-    return ax
+#     marker_map = create_marker_map(all_runs)
+
+#     legend_handles = {}
+
+#     for i, cp in enumerate(cps):
+#         df = experiments[cp]["dotp"]
+
+#         mean = df["dotp"].mean()
+#         std = df["dotp"].std()
+#         vmin = df["dotp"].min()
+#         vmax = df["dotp"].max()
+
+#         # --- mean bar
+#         ax.bar(
+#             i,
+#             mean,
+#             color="lightgray",
+#             edgecolor="black",
+#             width=0.6,
+#             zorder=1,
+#         )
+
+#         # --- min / max whiskers
+#         ax.vlines(
+#             i,
+#             vmin,
+#             vmax,
+#             color="black",
+#             linewidth=1.5,
+#             zorder=2,
+#         )
+#         ax.hlines(
+#             [vmin, vmax],
+#             i - 0.08,
+#             i + 0.08,
+#             color="black",
+#             linewidth=1.5,
+#             zorder=2,
+#         )
+
+#         # --- std (±1σ) as inner error bar
+#         ax.errorbar(
+#             i,
+#             mean,
+#             yerr=std,
+#             fmt="none",
+#             ecolor="dimgray",
+#             elinewidth=3,
+#             capsize=6,
+#             zorder=3,
+#         )
+
+#         # --- scatter: ALL dotp_allreduce samples
+#         for run, sub in df.groupby("run"):
+#             yvals = sub["dotp_allreduce"].values
+#             jitter = (np.random.rand(len(yvals)) - 0.5) * 0.25
+
+#             sc = ax.scatter(
+#                 np.full(len(yvals), i) + jitter,
+#                 yvals,
+#                 color=colors[cp],
+#                 marker=marker_map[run],
+#                 s=35,
+#                 zorder=2,
+#                 label=f"Run {run}",
+#             )
+
+#             # one legend entry per run
+#             if run not in legend_handles:
+#                 legend_handles[run] = sc
+
+#     ax.set_xticks(x)
+#     ax.set_xticklabels(cps, rotation=30, ha="right")
+#     ax.set_ylabel("Time")
+#     ax.set_title("dotp runtime breakdown")
+
+#     if len(all_runs) > 1:
+#         ax.legend(
+#             legend_handles.values(),
+#             legend_handles.keys(),
+#             title="Run",
+#             fontsize=8,
+#             loc="best",
+#         )
+
+#     return ax
 
 
 def plot_spmv_halo_breakdown(
@@ -524,7 +592,7 @@ def main():
 
     # for grid in grids:
     grid = '128x128x128'
-    for nodes in nodes_list:
+    for nodes in [4]:
 
         # select matching experiments
         pairs = query_meta_df_dict_pairs(
@@ -545,7 +613,7 @@ def main():
             meta["cluster_partition"]: dfs
             for meta, dfs in pairs
         }
-        print(pairs[0][1]['dotp'])
+        # print(pairs[0][1]['dotp'])
 
         prefix = f"{args.outdir}/runtime_{grid}_{nodes}nodes"
 
@@ -565,11 +633,9 @@ def main():
         # ============================================================
         # 2) dotp breakdown
         # ============================================================
-        fig, ax = plt.subplots(figsize=(7, 4))
-        plot_dotp_breakdown(
+        fig, ax = plot_dotp_breakdown(
             experiments=experiments,
             colors=colors,
-            ax=ax,
         )
         fig.tight_layout()
         fig.savefig(f"{prefix}_dotp_breakdown.png", dpi=150)
@@ -588,7 +654,7 @@ def main():
         # fig.savefig(f"{prefix}_spmv_halo_breakdown.png", dpi=150)
         # plt.close(fig)
 
-        fig, ax = plt.subplots(figsize=(7, 4))
+        fig, ax = plt.subplots(figsize=(4, 4))
         plot_precond_breakdown(
             experiments=experiments,
             colors=colors,
