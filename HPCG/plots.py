@@ -265,22 +265,17 @@ def plot_dotp_breakdown(
 ):
     cps = list(experiments.keys())
     nsys = len(cps)
-
     fig, axes = plt.subplots(
         1, nsys, figsize=figsize, sharey=True, squeeze=False
     )
     axes = axes[0]
-
     for ax, cp in zip(axes, cps):
         if cp not in colors:
             raise KeyError(f"Missing color for system '{cp}'")
-
         base_color = colors[cp]
         df = experiments[cp]["dotp"].copy()
-
         # ---- sort by rank, then dotp
         df = df.sort_values(["rank", "dotp"])
-
         # ---- aggregate per rank
         if aggregate == "mean":
             agg = df.groupby("rank", as_index=False).mean(numeric_only=True)
@@ -288,14 +283,11 @@ def plot_dotp_breakdown(
             agg = df.groupby("rank", as_index=False).sum(numeric_only=True)
         else:
             raise ValueError("aggregate must be 'mean' or 'sum'")
-
         ranks = agg["rank"].values
         dotp = agg["dotp"].values
         allr = agg["dotp_allreduce"].values
-
         compute = np.clip(dotp - allr, 0.0, None)
         x = np.arange(len(ranks))
-
         # ---- stacked bars
         ax.bar(
             x,
@@ -310,18 +302,22 @@ def plot_dotp_breakdown(
             color=_with_alpha(base_color, 0.85),
             label="Allreduce",
         )
-
         ax.set_title(cp, fontsize=14)
         ax.set_xticks(x)
         ax.set_xticklabels(ranks)
         ax.set_xlabel("Rank")
         ax.grid(axis="y", linestyle="--", alpha=0.3)
-
-        # ---- per-subplot legend
-        ax.legend(fontsize=10, loc="best", frameon=False)
-
+        # ---- per-subplot legend with box
+        ax.legend(
+            fontsize=10,
+            loc="best",
+            frameon=True,
+            framealpha=1.0,
+            fancybox=True,
+            edgecolor='black',
+            facecolor='white'
+        )
     axes[0].set_ylabel("Time")
-
     return fig, axes
 
 # def plot_dotp_breakdown(
@@ -442,24 +438,19 @@ def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", f
     spmv_halo breakdown:
       - stacked bar: mean spmv time split into computation vs halo exchange
     """
-
     cps = list(experiments.keys())
     nsys = len(cps)
-
     fig, axes = plt.subplots(
         1, nsys, figsize=figsize, sharey=True, squeeze=False
     )
     axes = axes[0]
-
     for ax, cp in zip(axes, cps):
         if cp not in colors:
             raise KeyError(f"Missing color for system '{cp}'")
-
         base_color = colors[cp]
         df = experiments[cp]["spmv_halo"].copy()
         # ---- sort by rank, then dotp
         df = df.sort_values(["rank", "spmv"])
-
         # ---- aggregate per rank
         if aggregate == "mean":
             agg = df.groupby("rank", as_index=False).mean(numeric_only=True)
@@ -467,19 +458,11 @@ def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", f
             agg = df.groupby("rank", as_index=False).sum(numeric_only=True)
         else:
             raise ValueError("aggregate must be 'mean' or 'sum'")
-
         ranks = agg["rank"].values
         dotp = agg["spmv"].values
         allr = agg["exchange_halo"].values
-
-        print(f"System: {cp}")
-        print(f"ranks: {ranks}")
-        print(f"spmv: {dotp}")
-        print(f"halo: {allr}")
-
         compute = np.clip(dotp - allr, 0.0, None)
         x = np.arange(len(ranks))
-
         # ---- stacked bars
         ax.bar(
             x,
@@ -494,18 +477,22 @@ def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", f
             color=_with_alpha(base_color, 0.85),
             label="Halo Exchange",
         )
-
         ax.set_title(cp, fontsize=14)
         ax.set_xticks(x)
         ax.set_xticklabels(ranks)
         ax.set_xlabel("Rank")
         ax.grid(axis="y", linestyle="--", alpha=0.3)
-
-        # ---- per-subplot legend
-        ax.legend(fontsize=10, loc="best", frameon=False)
-
+        # ---- per-subplot legend with box
+        ax.legend(
+            fontsize=10,
+            loc="best",
+            frameon=True,
+            framealpha=1.0,
+            fancybox=True,
+            edgecolor='black',
+            facecolor='white'
+        )
     axes[0].set_ylabel("Time")
-
     return fig, axes
     
 
@@ -585,7 +572,7 @@ def main():
 
     # for grid in grids:
     grid = '128x128x128'
-    for nodes in [4]:
+    for nodes in [1, 2, 4]:
 
         # select matching experiments
         pairs = query_meta_df_dict_pairs(
