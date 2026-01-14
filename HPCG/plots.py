@@ -437,80 +437,77 @@ def plot_dotp_breakdown(
 #     return ax
 
 
-def plot_spmv_halo_breakdown(
-    experiments: dict,
-    colors: dict,
-    ax=None,
-):
+def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", figsize=(6, 4)):
     """
-    For spmv_halo:
-      x = cluster_partition subdivided by halo_msg_size_bytes
-      - gray bars: mean total spmv time ± std
-      - scatter: per-run exchange_halo time
+    spmv_halo breakdown:
+      - stacked bar: mean spmv time split into computation vs halo exchange
     """
-    import matplotlib.pyplot as plt
-    import numpy as np
-
-    if ax is None:
-        fig, ax = plt.subplots(figsize=(7, 4))
 
     cps = list(experiments.keys())
-    base_x = np.arange(len(cps))
+    nsys = len(cps)
 
-    # collect all halo sizes (assumed consistent)
-    halo_sizes = sorted({
-        h
-        for cp in cps
-        for h in experiments[cp]["spmv_halo"]["halo_msg_size_bytes"].unique()
-    })
+    fig, axes = plt.subplots(
+        1, nsys, figsize=figsize, sharey=True, squeeze=False
+    )
+    axes = axes[0]
 
-    offsets = np.linspace(-0.3, 0.3, len(halo_sizes))
-    width = 0.25 / max(1, len(halo_sizes))
+    for ax, cp in zip(axes, cps):
+        if cp not in colors:
+            raise KeyError(f"Missing color for system '{cp}'")
 
-    for h_idx, halo in enumerate(halo_sizes):
-        for i, cp in enumerate(cps):
-            df = experiments[cp]["spmv_halo"]
+        base_color = colors[cp]
+        df = experiments[cp]["spmv_halo"].copy()
+        # ---- sort by rank, then dotp
+        df = df.sort_values(["rank", "spmv"])
 
-            sub = (
-                df[df["halo_msg_size_bytes"] == halo]
-                .groupby("run")
-                .agg(
-                    spmv_total=("spmv", "sum"),
-                    halo_time=("exchange_halo", "sum"),
-                )
-            )
+        # ---- aggregate per rank
+        if aggregate == "mean":
+            agg = df.groupby("rank", as_index=False).mean(numeric_only=True)
+        elif aggregate == "sum":
+            agg = df.groupby("rank", as_index=False).sum(numeric_only=True)
+        else:
+            raise ValueError("aggregate must be 'mean' or 'sum'")
 
-            mean = sub["spmv_total"].mean()
-            std = sub["spmv_total"].std()
+        ranks = agg["rank"].values
+        dotp = agg["spmv"].values
+        allr = agg["exchange_halo"].values
 
-            x = base_x[i] + offsets[h_idx]
+        print(f"System: {cp}")
+        print(f"ranks: {ranks}")
+        print(f"spmv: {dotp}")
+        print(f"halo: {allr}")
 
-            ax.bar(
-                x,
-                mean,
-                width=width,
-                yerr=std,
-                color="lightgray",
-                edgecolor="black",
-                capsize=3,
-                zorder=1,
-            )
+        compute = np.clip(dotp - allr, 0.0, None)
+        x = np.arange(len(ranks))
 
-            jitter = (np.random.rand(len(sub)) - 0.5) * width
-            ax.scatter(
-                np.full(len(sub), x) + jitter,
-                sub["halo_time"],
-                color=colors[cp],
-                s=18,
-                zorder=2,
-            )
+        # ---- stacked bars
+        ax.bar(
+            x,
+            compute,
+            bottom=allr,
+            color=_with_alpha(base_color, 0.45),
+            label="Compute",
+        )
+        ax.bar(
+            x,
+            allr,
+            color=_with_alpha(base_color, 0.85),
+            label="Halo Exchange",
+        )
 
-    ax.set_xticks(base_x)
-    ax.set_xticklabels(cps, rotation=30, ha="right")
-    ax.set_ylabel("Time")
-    ax.set_title("spmv_halo runtime vs communication")
+        ax.set_title(cp, fontsize=14)
+        ax.set_xticks(x)
+        ax.set_xticklabels(ranks)
+        ax.set_xlabel("Rank")
+        ax.grid(axis="y", linestyle="--", alpha=0.3)
 
-    return ax
+        # ---- per-subplot legend
+        ax.legend(fontsize=10, loc="best", frameon=False)
+
+    axes[0].set_ylabel("Time")
+
+    return fig, axes
+    
 
 
 def main():
@@ -530,11 +527,7 @@ def main():
     meta_dfs_pairs, meta_df = import_export.read_multiple_from_parquet(args.csv_files)
     import_export.describe_pairs_content(meta_dfs_pairs, verbose=True)
 
-    print(meta_dfs_pairs[0][1]['halo_precond'].head(20))
-    print(meta_dfs_pairs[0][1]['mg'].head(20))
-
-    print(len(meta_dfs_pairs[0][1]['halo_precond']))
-    print(len(meta_dfs_pairs[0][1]['mg']))
+    print(meta_dfs_pairs[0][1]['spmv_halo'].head(20))
  
     if meta_df is None:
         raise Exception("meta_df is None")
@@ -644,15 +637,13 @@ def main():
         # ============================================================
         # 3) spmv_halo breakdown
         # ============================================================
-        # fig, ax = plt.subplots(figsize=(8, 4))
-        # plot_spmv_halo_breakdown(
-        #     experiments=experiments,
-        #     colors=colors,
-        #     ax=ax,
-        # )
-        # fig.tight_layout()
-        # fig.savefig(f"{prefix}_spmv_halo_breakdown.png", dpi=150)
-        # plt.close(fig)
+        fig, ax = plot_spmv_halo_breakdown(
+            experiments=experiments,
+            colors=colors,
+        )
+        fig.tight_layout()
+        fig.savefig(f"{prefix}_spmv_halo_breakdown.png", dpi=150)
+        plt.close(fig)
 
         fig, ax = plt.subplots(figsize=(4, 4))
         plot_precond_breakdown(
