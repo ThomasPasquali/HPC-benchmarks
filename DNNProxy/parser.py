@@ -1,17 +1,19 @@
 import json
 import pandas as pd
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import sbatchman as sbm
 import sys
 import numpy as np
 import os
 from argparse import ArgumentParser
+from pathlib import Path
 
-# Make sure Python can find ccutils
-home = os.getenv("HOME")
-sys.path.append(f"{home}")
-
+sys.path.append(str(Path(__file__).parent.parent))
 from ccutils.parser.ccutils_parser import *
+from py_utils.utils.utils import raise_none, dict_get
+
+OUT_DIR = Path("results")
+OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def extract_fsdp_metrics_df(fsdp_section, job_vars):
     """
@@ -110,8 +112,8 @@ def extract_dp_metrics_df(dp_section, job_vars):
     model_name = job_vars.get("models", json_data.get("model_name"))
     local_batch_size = json_data.get("local_batch_size")
     num_buckets = job_vars.get("num_buckets", json_data.get("num_buckets"))
-    fwd_rt = json_data.get("fwd_rt_whole_model_s")
-    bwd_rt = json_data.get("bwd_rt_per_bucket_s")
+    fwd_rt = json_data.get("fwd_rt_whole_model")
+    bwd_rt = json_data.get("bwd_rt_per_bucket")
     msg_avg = json_data.get("msg_size_avg_bytes")
     msg_std = json_data.get("msg_size_std_bytes")
 
@@ -121,7 +123,7 @@ def extract_dp_metrics_df(dp_section, job_vars):
     for rank, json_str in rank_outputs.items():
         parsed = json.loads(json_str)
         runtimes = parsed["runtimes"]
-        barrier_times = parsed["barrier_time_us"]
+        barrier_times = parsed["barrier_time"]
 
         for rt, bt in zip(runtimes, barrier_times):
             row = {
@@ -130,13 +132,13 @@ def extract_dp_metrics_df(dp_section, job_vars):
                 "model_name": model_name,
                 "local_batch_size": local_batch_size,
                 "num_buckets": num_buckets,
-                "fwd_rt_whole_model_s": fwd_rt,
-                "bwd_rt_per_bucket_s": bwd_rt,
+                "fwd_rt_whole_model": fwd_rt,
+                "bwd_rt_per_bucket": bwd_rt,
                 "msg_size_avg_bytes": msg_avg,
                 "msg_size_std_bytes": msg_std,
                 "rank": rank,
-                "runtime_s": rt,
-                "barrier_time_s": bt
+                "runtime": rt,
+                "barrier_time": bt
             }
             rows.append(row)
 
@@ -195,3 +197,15 @@ def get_metrics_dataframe(strategy: str = "dp"):
         # DP: just concatenate the single DataFrames
         full_df = pd.concat(all_dfs, ignore_index=True)
         return full_df
+
+if __name__ == "__main__":
+    df_dp = get_metrics_dataframe("dp")
+    df_fsdp_runtime, df_fsdp_commtime = get_metrics_dataframe("fsdp")
+
+    out_dp_file = OUT_DIR / f"dnnproxy_{sbm.get_cluster_name()}_dp.csv"
+    out_fsdp_file_runtime = OUT_DIR / f"dnnproxy_{sbm.get_cluster_name()}_fsdp_runtime.csv"
+    out_fsdp_file_commtime = OUT_DIR / f"dnnproxy_{sbm.get_cluster_name()}_fsdp_commtime.csv"
+
+    df_dp.to_csv(out_dp_file, index=False)
+    df_fsdp_runtime.to_csv(out_fsdp_file_runtime, index=False)
+    df_fsdp_commtime.to_csv(out_fsdp_file_commtime, index=False)
