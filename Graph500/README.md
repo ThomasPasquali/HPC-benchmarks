@@ -36,11 +36,8 @@ python3 plots.py
 
 ## Plots with data from Multiple Sources
 
-1) Sync the `graph500_<cluster>_summary_aggr.csv` and `graph500_<cluster>_summary.csv` files on one machine
+1) Sync the `graph500_<cluster>_data.parquet` files on one machine
 2) Run:
 ```bash
-python3 plots.py \
-    path/to/graph500_<cluster1>_summary_aggr.csv path/to/graph500_<cluster1>_summary.csv \
-    path/to/graph500_<cluster2>_summary_aggr.csv path/to/graph500_<cluster2>_summary.csv \
-    ...
+python3 plots.py path/to/graph500_<cluster1>_data.parquet path/to/graph500_<cluster2>_data.parquet ...
 ```

@@ -2,15 +2,19 @@ sequential: true
 
 variables:
   nodes: [1, 2, 4, 8]
-  partition: ["nanjing"]
-  which: ['inter']
+  
+  partition: ['nanjing-inter', 'nanjing-intra']
 
-  bin: ["graph500_reference_bfs", "graph500_reference_bfs_smallbuf", "graph500_reference_bfs_largebuf"]
-  scale: [14, 20]
-  edgefactor: [8, 32]
+  bin:
+   - "graph500_bfs_2KiB"
+   - "graph500_bfs_32KiB"
+   - "graph500_bfs_256KiB"
+   - "graph500_bfs_8MiB"
+  scale: [20]
+  edgefactor: [8, 16, 32]
   
 
-command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{which} ./bin/{bin} {scale} {edgefactor}"
+command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./bin/{bin} {scale} {edgefactor}"
 
 jobs:
   - config: "{partition}_{nodes}nodes"
