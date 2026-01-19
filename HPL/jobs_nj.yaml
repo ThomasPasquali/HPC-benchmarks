@@ -3,11 +3,10 @@ sequential: true
 
 variables:
   nodes: [1, 2, 4, 8]
-  partition: ["nanjing"]
-  which: ['inter']
+  partition: ['nanjing-inter', 'nanjing-intra']
 
 preprocess: "./gen_dat_file.sh {nodes} {nodes}"
-command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{which} ./xhpl"
+command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./xhpl"
 
 jobs:
   - config: "{partition}_{nodes}nodes"

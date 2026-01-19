@@ -53,6 +53,9 @@ leonardo:
 nanjing:
   scheduler: local
 
+  variables:
+    partition: ["nanjing-inter", "nanjing-intra"]
+
   default_conf:
     env:
       - "OMP_PROC_BIND=true"
@@ -61,4 +64,4 @@ nanjing:
       - "LD_LIBRARY_PATH=/root/hpc/build/gcc/lib64:/root/hpc/build/lib:$LD_LIBRARY_PATH"
 
   configs:
-    - name: "nanjing_{nodes}nodes"
+    - name: "{partition}_{nodes}nodes"
