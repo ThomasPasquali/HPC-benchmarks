@@ -4,7 +4,7 @@ variables:
   nodes: [1, 2, 4, 8]
   models_dp: ['vit_b_16_32', 'vit_b_16_128', 'vit_l_16_32', 'vit_l_16_128', 'vit_h_16_32', 'vit_h_16_128']
   num_buckets: [8, 32, 128]
-  base_path: ["HPC-benchmarks/DNNProxy/DNNProxy"]
+  base_path: ["DNNProxy"]
   models_fsdp: ['gpt2_l_32', 'gpt2_l_128']
   num_units: [6, 12, 18]
   partition: ["nanjing-inter", "nanjing-intra"]
