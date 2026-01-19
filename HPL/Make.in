@@ -1,36 +1,36 @@
-#
-#  -- High Performance Computing Linpack Benchmark (HPL)
-#     HPL - 2.3 - December 2, 2018
-#     Antoine P. Petitet
-#     University of Tennessee, Knoxville
-#     Innovative Computing Laboratory
-#     (C) Copyright 2000-2008 All Rights Reserved
-#
-#  -- Copyright notice and Licensing terms:
-#
+#  
+#  -- High Performance Computing Linpack Benchmark (HPL)                
+#     HPL - 2.3 - December 2, 2018                          
+#     Antoine P. Petitet                                                
+#     University of Tennessee, Knoxville                                
+#     Innovative Computing Laboratory                                 
+#     (C) Copyright 2000-2008 All Rights Reserved                       
+#                                                                       
+#  -- Copyright notice and Licensing terms:                             
+#                                                                       
 #  Redistribution  and  use in  source and binary forms, with or without
 #  modification, are  permitted provided  that the following  conditions
-#  are met:
-#
+#  are met:                                                             
+#                                                                       
 #  1. Redistributions  of  source  code  must retain the above copyright
-#  notice, this list of conditions and the following disclaimer.
-#
+#  notice, this list of conditions and the following disclaimer.        
+#                                                                       
 #  2. Redistributions in binary form must reproduce  the above copyright
 #  notice, this list of conditions,  and the following disclaimer in the
-#  documentation and/or other materials provided with the distribution.
-#
+#  documentation and/or other materials provided with the distribution. 
+#                                                                       
 #  3. All  advertising  materials  mentioning  features  or  use of this
-#  software must display the following acknowledgement:
+#  software must display the following acknowledgement:                 
 #  This  product  includes  software  developed  at  the  University  of
-#  Tennessee, Knoxville, Innovative Computing Laboratory.
-#
+#  Tennessee, Knoxville, Innovative Computing Laboratory.             
+#                                                                       
 #  4. The name of the  University,  the name of the  Laboratory,  or the
 #  names  of  its  contributors  may  not  be used to endorse or promote
 #  products  derived   from   this  software  without  specific  written
-#  permission.
-#
-#  -- Disclaimer:
-#
+#  permission.                                                          
+#                                                                       
+#  -- Disclaimer:                                                       
+#                                                                       
 #  THIS  SOFTWARE  IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 #  ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES,  INCLUDING,  BUT NOT
 #  LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -41,9 +41,9 @@
 #  DATA OR PROFITS; OR BUSINESS INTERRUPTION)  HOWEVER CAUSED AND ON ANY
 #  THEORY OF LIABILITY, WHETHER IN CONTRACT,  STRICT LIABILITY,  OR TORT
 #  (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#  OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
 # ######################################################################
-#
+#  
 # ----------------------------------------------------------------------
 # - shell --------------------------------------------------------------
 # ----------------------------------------------------------------------
@@ -72,7 +72,7 @@ INCdir       = $(TOPdir)/include
 BINdir       = $(TOPdir)/bin/$(ARCH)
 LIBdir       = $(TOPdir)/lib/$(ARCH)
 #
-HPLlib       = $(LIBdir)/libhpl.a
+HPLlib       = $(LIBdir)/libhpl.a 
 #
 # ----------------------------------------------------------------------
 # - Message Passing library (MPI) --------------------------------------
@@ -90,7 +90,7 @@ MPname       = -l#MPname#
 # ----------------------------------------------------------------------
 # LAinc tells the  C  compiler where to find the Linear Algebra  library
 # header files,  LAlib  is defined  to be the name of  the library to be
-# used.
+# used. 
 #
 LAinc        = -I#LAinc#
 LAlib        = -L#LAlib#
@@ -140,10 +140,8 @@ F2CDEFS      = -DAdd__ -DF77_INTEGER=int -DStringSunStyle
 # ----------------------------------------------------------------------
 # - HPL includes / libraries / specifics -------------------------------
 # ----------------------------------------------------------------------
-CCUTILS = $(TOPdir)/../../ccutils/install/include
-CCUTILS_ROOT = $(TOPdir)/../../ccutils
-
-HPL_INCLUDES = -I$(INCdir) -I$(INCdir)/$(ARCH) $(LAinc) $(MPinc) -I$(CCUTILS)
+#
+HPL_INCLUDES = -I$(INCdir) -I$(INCdir)/$(ARCH) $(LAinc) $(MPinc)
 HPL_LIBS     = $(HPLlib) $(LAlib) $(LAname) $(MPlib) $(MPname)
 #
 # - Compile time options -----------------------------------------------
@@ -158,7 +156,7 @@ HPL_LIBS     = $(HPLlib) $(LAlib) $(LAname) $(MPlib) $(MPname)
 #    *) call the BLAS Fortran 77 interface,
 #    *) not display detailed timing information.
 #
-HPL_OPTS     = -DHPL_DETAILED_TIMING -DHPL_PROGRESS_REPORT -DHPL_CALL_CBLAS -DCCUTILS_ENABLE_MPI
+HPL_OPTS     = -DHPL_DETAILED_TIMING -DHPL_PROGRESS_REPORT
 #
 # ----------------------------------------------------------------------
 #
@@ -168,11 +166,11 @@ HPL_DEFS     = $(F2CDEFS) $(HPL_OPTS) $(HPL_INCLUDES)
 # - Compilers / linkers - Optimization flags ---------------------------
 # ----------------------------------------------------------------------
 #
-CC       = mpicxx
+CC       = mpicc
 CCNOOPT  = $(HPL_DEFS)
 # -m64
 OMP_DEFS = -fopenmp -lpthread -lm
-CCFLAGS  = $(HPL_DEFS) -fpermissive -march=native -fomit-frame-pointer -O3 -funroll-loops -W -Wall -fopenmp -lm
+CCFLAGS  = $(HPL_DEFS) -std=c99 -march=native -fomit-frame-pointer -O3 -funroll-loops -W -Wall -fopenmp -lm
 #
 # On some platforms,  it is necessary  to use the Fortran linker to find
 # the Fortran internals used in the BLAS library.
