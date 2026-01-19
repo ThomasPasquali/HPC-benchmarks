@@ -25,7 +25,7 @@ Examples
 
 ```bash
 # HAICGU
-./build_makefile.sh kp920 /software/kp920-RL8/Stages/2024/software/OpenBLAS/0.3.27-GCC-14.1.0/lib64/ openblas /software/kp920-RL8/Stages/2024/software/OpenBLAS/0.3.27-GCC-14.1.0/include/ /software/kp920-RL8/Stages/2024/software/OpenMPI/5.0.3-GCC-14.1.0/lib64 mpi /software/kp920-RL8/Stages/2024/software/OpenMPI/5.0.3-GCC-14.1.0/include/
+./build_makefile.sh kp920 /software/kp920-RL8/Stages/2024/software/OpenMPI/5.0.3-GCC-14.1.0/lib64 mpi /software/kp920-RL8/Stages/2024/software/OpenMPI/5.0.3-GCC-14.1.0/include/
 ```
 
 ## Run
@@ -47,8 +47,8 @@ python3 parse_results.py
 
 ## Plots with data from Multiple Sources
 
-1) Sync the `hpcg_results_<cluster>.csv` files on one machine
+1) Sync the `hpcg_results_<cluster>.parquet` files on one machine
 2) Run:
 ```bash
-python3 plots.py hpcg_results_<cluster1>.csv hpcg_results_<cluster2>.csv ...
+python3 plots.py hpcg_results_<cluster1>.parquet hpcg_results_<cluster2>.parquet ...
 ```

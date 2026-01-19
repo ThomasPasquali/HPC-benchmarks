@@ -19,8 +19,10 @@ haicgu:
       - "OMP_PROC_BIND=true"
       - "OMP_NUM_THREADS=128"
     exclude:
-      - cn17
-      - cn19
+      - "cn17"
+      - "cn19"
+    custom_headers:
+      - "#SBATCH --ntasks-per-node=1"
 
   configs:
     - name: "{partition}_{nodes}nodes"
@@ -53,6 +55,9 @@ leonardo:
 nanjing:
   scheduler: local
 
+  variables:
+    partition: ["nanjing-inter", "nanjing-intra"]
+
   default_conf:
     env:
       - "OMP_PROC_BIND=true"
@@ -61,4 +66,4 @@ nanjing:
       - "LD_LIBRARY_PATH=/root/hpc/build/gcc/lib64:/root/hpc/build/lib:$LD_LIBRARY_PATH"
 
   configs:
-    - name: "nanjing_{nodes}nodes"
+    - name: "{partition}_{nodes}nodes"

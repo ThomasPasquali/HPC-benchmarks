@@ -21,24 +21,17 @@ TOPdir="$(pwd)/${HPCG_PATH}"
 
 if [[ -z "$ARCH" || -z "$MPlib" || -z "$MPname" || -z "$MPinc" ]]; then
   echo "Error: Missing required arguments."
-  echo "Usage: $0 <ARCH> <LAlib> <LAname> <LAinc> <MPlib> <MPname> <MPinc> [HPCG_PATH]"
+  echo "Usage: $0 <ARCH> <MPlib> <MPname> <MPinc> [HPCG_PATH]"
   exit 1
 fi
 
-
-#if [[ -z "$ARCH" || -z "$LAlib" || -z "$LAinc"  || -z "$LAname" || -z "$MPlib" || -z "$MPname" || -z "$MPinc" ]]; then
-#  echo "Error: Missing required arguments."
-#  echo "Usage: $0 <ARCH> <LAlib> <LAname> <LAinc> <MPlib> <MPname> <MPinc> [HPCG_PATH]"
-#  exit 1
-#fi
-
 sed "s|#ARCH#|${ARCH}|g; s|#MPlib#|${MPlib}|g; s|#MPname#|${MPname}|g; s|#MPinc#|${MPinc}|g; s|#TOPdir#|${TOPdir}|g" Make.in > Make.out
 
-# if [[ ! -d ${HPCG_PATH} ]]; then
-#   git clone -b $BRANCHNAME --recursive https://github.com/hpcg-benchmark/hpcg.git ${HPCG_PATH}
-# else
-#   echo "Directory ${HPCG_PATH} already exists; assuming source code has been downloaded before"
-# fi
+if [[ ! -d ${HPCG_PATH} ]]; then
+  git clone -b $BRANCHNAME --recursive https://github.com/hpcg-benchmark/hpcg.git ${HPCG_PATH}
+else
+  echo "Directory ${HPCG_PATH} already exists; assuming source code has been downloaded before"
+fi
 
 cd ${HPCG_PATH}
 mkdir -p bin
