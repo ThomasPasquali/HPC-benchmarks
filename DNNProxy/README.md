@@ -35,13 +35,7 @@ sbmc -f configs.yaml -ow               # sbmc -> sbatchman configure
 
 ```bash
 # Assuming you’ve set up the SbatchMan aliases:
-sbl -f jobs.yaml                       # sbl -> sbatchman launch
-```
-
-## Run on Leonardo
-The Python script **run_on_leonardo** ensures that the nodes for the experiments are on different L1 switches but under the same L2 switch (same cell, different switch). Nodes are divided into two equally sized groups each under a different L1 switch.
-```bash
-python run_on_leonardo.py --csv ../machines/Leonardo/leo_map.txt --jobs jobs.yaml
+sbl -f jobs_nl.yaml                       # sbl -> sbatchman launch
 ```
 
 ## Generate Data + (local) Plots
@@ -49,13 +43,5 @@ python run_on_leonardo.py --csv ../machines/Leonardo/leo_map.txt --jobs jobs.yam
 Once all experiments are done:
 
 ```bash
-python3 plots.py
-```
-
-## Plots with data from Multiple Sources
-
-1) Sync the `results/dnnproxies_<cluster>_data.csv` files on one machine
-2) Run:
-```bash
-python3 plots.py path/to/dnnproxies_<cluster1>_data.csv path/to/dnnproxies_<cluster2>_data.csv ...
+python3 parser.py
 ```
