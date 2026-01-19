@@ -49,19 +49,3 @@ leonardo:
     - name: "leonardo_{nodes}nodes"
       nodes: "{nodes}"
       ntasks: "{nodes}"
-
-nanjing:
-  scheduler: local
-
-  variables:
-    partition: ["nanjing-inter", "nanjing-intra"]
-
-  default_conf:
-    env:
-      - "OMP_PROC_BIND=true"
-      - "OMP_NUM_THREADS=128"
-      - "PATH=/root/hpc/build/gcc/bin:/root/hpc/build/bin:$PATH"
-      - "LD_LIBRARY_PATH=/root/hpc/build/gcc/lib64:/root/hpc/build/lib:$LD_LIBRARY_PATH"
-
-  configs:
-    - name: "{partition}_{nodes}nodes"
