@@ -27,13 +27,18 @@ haicgu:
 nanjing:
   scheduler: local
 
+  variables:
+    partition: ["nanjing-inter", "nanjing-intra"]
+
   default_conf:
     env:
+      - "OMP_PROC_BIND=true"
+      - "OMP_NUM_THREADS=128"
       - "PATH=/root/hpc/build/gcc/bin:/root/hpc/build/bin:$PATH"
       - "LD_LIBRARY_PATH=/root/hpc/build/gcc/lib64:/root/hpc/build/lib:$LD_LIBRARY_PATH"
 
   configs:
-    - name: "nanjing_{nodes}nodes"
+    - name: "{partition}_{nodes}nodes"
 
 leonardo:
   scheduler: slurm
