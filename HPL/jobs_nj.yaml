@@ -6,7 +6,7 @@ variables:
   partition: ['nanjing-inter', 'nanjing-intra']
 
 preprocess: "./gen_dat_file.sh {nodes} {nodes}"
-command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./xhpl"
+command: "mpirun --allow-run-as-root --map-by node -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./xhpl"
 
 jobs:
   - config: "{partition}_{nodes}nodes"

@@ -9,7 +9,7 @@ variables:
   grid_size: [128]
   min_runtime: [0] # In seconds
 
-command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./xhpcg --nx={grid_size} --ny={grid_size} --nz={grid_size} --rt={min_runtime}"
+command: "mpirun --allow-run-as-root --map-by node -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./xhpcg --nx={grid_size} --ny={grid_size} --nz={grid_size} --rt={min_runtime}"
 
 jobs:
   - config: "{partition}_{nodes}nodes"

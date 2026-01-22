@@ -14,8 +14,8 @@ jobs:
   - config: "{partition}_{nodes}nodes"
     config_jobs:
       - tag: "dp_{nodes}nodes"
-        command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./dp {models_dp} {num_buckets} {base_path}"
+        command: "mpirun --allow-run-as-root --map-by node -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./dp {models_dp} {num_buckets} {base_path}"
 
       - tag: "fsdp_{nodes}nodes"
-        command: "mpirun --allow-run-as-root -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./fsdp {models_fsdp} {num_units} {nodes} {base_path}"
+        command: "mpirun --allow-run-as-root --map-by node -x PATH -x LD_LIBRARY_PATH -np {nodes} --hostfile /root/hpc/tpasquali/HPC-benchmarks/NJ/{nodes}hosts_{partition} ./fsdp {models_fsdp} {num_units} {nodes} {base_path}"
 
