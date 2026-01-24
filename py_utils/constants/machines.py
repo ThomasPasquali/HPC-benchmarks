@@ -36,6 +36,8 @@ PARTITION_NAMES_MAP = {
   'NSLB': 'nslb',
   'plain': 'default',
   'boost_usr_prod': 'booster',
+  'nanjing-inter': 'inter',
+  'nanjing-intra': 'intra',
   # Debug
   'test': 'test',
   'other': 'other',
