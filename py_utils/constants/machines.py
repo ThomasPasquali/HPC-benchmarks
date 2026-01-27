@@ -25,6 +25,8 @@ CACHE_SIZES = {
 
 CLUSTER_NAMES_MAP = {
   'nanjing': 'NJ',
+  'nanjing-inter': 'NJ',
+  'nanjing-intra': 'NJ',
   'haicgu': 'HAICGU',
   'leonardo': 'LEO',
   'local': 'local',

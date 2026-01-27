@@ -3,6 +3,7 @@
 
 haicgu_source.sh
 run_all_on_nanjing.sh
+test_and_run_all_nj.sh
 
 *bsc-hca/
 *baldo/

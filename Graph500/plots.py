@@ -10,6 +10,7 @@ import argparse
 sys.path.append(str(Path(__file__).parent.parent / "machines"))
 from Leonardo.nodelists_generator import LeonardoNodelistGenerator
 from HAICGU.nodes_map import HAICGUNodesMap
+from Nanjing.nodes_map import NanjingNodesMap
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.constants.plots import *
@@ -140,7 +141,7 @@ def plot_binned_boxplots(df: pd.DataFrame, title: str, outfile: Path, bins=6):
     plt.xticks(
         ticks=[i for i in range(len(bin_list))],
         labels=[
-            f"[{format_bytes(max(b.left, 0), precision=1, binary=True)}, {format_bytes(b.right, precision=1, binary=True)}]"
+            f"[{format_bytes(max(b.left, 0), precision=0, binary=True)}, {format_bytes(b.right, precision=0, binary=True)}]"
             for b in bin_list
         ],
         rotation=40,
@@ -326,8 +327,6 @@ def main():
         meta_df["buffer_size"].map(lambda x: parse_bytes(x, True)).astype(int)
     )
 
-    leo_gen = LeonardoNodelistGenerator()
-    haicgu_gen = HAICGUNodesMap()
     for meta, df_dict in meta_df_dict_pairs:
         meta["cluster"] = CLUSTER_NAMES_MAP[meta["cluster"]]
         meta["partition"] = PARTITION_NAMES_MAP[meta["partition"]]
@@ -340,9 +339,11 @@ def main():
 
         gen = None
         if cluster_name == CLUSTER_NAMES_MAP["leonardo"]:
-            gen = leo_gen
+            gen = LeonardoNodelistGenerator()
         elif cluster_name == CLUSTER_NAMES_MAP["haicgu"]:
-            gen = haicgu_gen
+            gen = HAICGUNodesMap()
+        elif cluster_name == CLUSTER_NAMES_MAP["nanjing"]:
+            gen = NanjingNodesMap()
         # Add here more distances scripts
         if gen is not None:
             df["distance"] = df.apply(
