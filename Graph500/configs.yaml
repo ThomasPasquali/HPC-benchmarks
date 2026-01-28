@@ -14,13 +14,15 @@ haicgu:
     modules: 
       - "GCC/14.1.0"
       - "OpenMPI/5.0.3"
+    # SLURM does not like this
+    #   - "OMP_PROC_BIND=true"
+    #   - "OMP_NUM_THREADS=128"
     env:
       - "SKIP_VALIDATION=1"
-      - "OMP_PROC_BIND=true"
-      - "OMP_NUM_THREADS=128"
-    exclude:
-      - cn17
-      - cn19
+    # These have been fixed
+    # exclude:
+    #   - cn17
+    #   - cn19
 
   configs:
     - name: "{partition}_{nodes}nodes"
