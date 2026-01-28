@@ -313,10 +313,14 @@ def main():
     meta_df_dict_pairs, meta_df = import_export.read_multiple_from_parquet(
         args.parquet_files
     )
-    import_export.describe_pairs_content(meta_df_dict_pairs)
+    import_export.describe_pairs_content(meta_df_dict_pairs, verbose=False)
 
     if meta_df is None:
         raise Exception("meta_df is None")
+    
+    # Remove old data
+    meta_df = meta_df[~meta_df["buffer_size"].str.contains("buf")]
+    print(meta_df)
 
     meta_df["cluster"] = meta_df["cluster"].map(CLUSTER_NAMES_MAP)
     meta_df["partition"] = meta_df["partition"].map(PARTITION_NAMES_MAP)
@@ -327,24 +331,34 @@ def main():
         meta_df["buffer_size"].map(lambda x: parse_bytes(x, True)).astype(int)
     )
 
-    for meta, df_dict in meta_df_dict_pairs:
+    # Collect indices to keep
+    indices_to_keep = []
+    leo_gen = LeonardoNodelistGenerator()
+    
+    for idx, (meta, df_dict) in enumerate(meta_df_dict_pairs):
+        if 'buf' in meta['buffer_size']:
+            continue
         meta["cluster"] = CLUSTER_NAMES_MAP[meta["cluster"]]
         meta["partition"] = PARTITION_NAMES_MAP[meta["partition"]]
         meta["cluster_partition"] = f'{meta["cluster"]}-{meta["partition"]}'
         cluster_name = meta["cluster"]
+        if not meta.get("rank_node_map"):
+            continue
         ranks_nodes_map = meta["rank_node_map"]
         if df_dict.get("packets") is None:
             continue
         df = df_dict["packets"]
+        indices_to_keep.append(idx)
 
         gen = None
         if cluster_name == CLUSTER_NAMES_MAP["leonardo"]:
-            gen = LeonardoNodelistGenerator()
+            gen = leo_gen
         elif cluster_name == CLUSTER_NAMES_MAP["haicgu"]:
             gen = HAICGUNodesMap()
         elif cluster_name == CLUSTER_NAMES_MAP["nanjing"]:
             gen = NanjingNodesMap()
         # Add here more distances scripts
+        
         if gen is not None:
             df["distance"] = df.apply(
                 lambda row: gen.get_node_distance(
@@ -359,6 +373,12 @@ def main():
             )
             df["distance"] = -1
             continue
+    
+    # Filter meta_df_dict_pairs
+    meta_df_dict_pairs = [meta_df_dict_pairs[i] for i in indices_to_keep]
+    
+    # print(meta_df)
+    # exit()
 
     Path(args.outdir / "scatter").mkdir(parents=True, exist_ok=True)
     Path(args.outdir / "boxplot").mkdir(parents=True, exist_ok=True)
