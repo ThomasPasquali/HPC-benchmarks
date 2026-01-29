@@ -118,7 +118,7 @@ def plot_kernel_runtime_breakdown(
     Each sub-bar is annotated with its percentage.
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(7, 4))
+        fig, ax = plt.subplots(figsize=(12, 6))
 
     # kernel definitions: (label, dataframe key, column)
     kernels = [
@@ -196,7 +196,7 @@ def plot_precond_breakdown(experiments: dict, colors: dict, ax=None):
       - Bar shows mean MG time split into computation vs communication
     """
     if ax is None:
-        fig, ax = plt.subplots(figsize=(4, 5))
+        fig, ax = plt.subplots(figsize=(6, 8))
 
     cps = list(experiments.keys())
     x = np.arange(len(cps))
@@ -246,9 +246,9 @@ def plot_precond_breakdown(experiments: dict, colors: dict, ax=None):
 
         ax.set_xticks(x)
         ax.set_xticklabels(cps, rotation=30, ha="right")
-        ax.set_ylabel("Time (s)")
+        ax.set_ylabel("Time [s]")
         # ax.set_title("Preconditioner Breakdown")
-        ax.legend(loc='best', fontsize=10)
+        ax.legend(loc='best')
         ax.grid(True, axis='y', linestyle='--', alpha=0.3)
 
     return ax
@@ -261,7 +261,7 @@ def plot_dotp_breakdown(
     experiments: dict,
     colors: dict,
     aggregate="sum",  # "mean" or "sum"
-    figsize=(6, 4),
+    figsize=(12, 6),
 ):
     cps = list(experiments.keys())
     nsys = len(cps)
@@ -317,7 +317,7 @@ def plot_dotp_breakdown(
             edgecolor='black',
             facecolor='white'
         )
-    axes[0].set_ylabel("Time")
+    axes[0].set_ylabel("Time [s]")
     return fig, axes
 
 # def plot_dotp_breakdown(
@@ -433,7 +433,7 @@ def plot_dotp_breakdown(
 #     return ax
 
 
-def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", figsize=(6, 4)):
+def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", figsize=(12, 6)):
     """
     spmv_halo breakdown:
       - stacked bar: mean spmv time split into computation vs halo exchange
@@ -449,7 +449,7 @@ def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", f
             raise KeyError(f"Missing color for system '{cp}'")
         base_color = colors[cp]
         df = experiments[cp]["spmv_halo"].copy()
-        # ---- sort by rank, then dotp
+        # ---- sort by rank, then spmv
         df = df.sort_values(["rank", "spmv"])
         # ---- aggregate per rank
         if aggregate == "mean":
@@ -459,21 +459,24 @@ def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", f
         else:
             raise ValueError("aggregate must be 'mean' or 'sum'")
         ranks = agg["rank"].values
-        dotp = agg["spmv"].values
-        allr = agg["exchange_halo"].values
-        compute = np.clip(dotp - allr, 0.0, None)
+        spmv = agg["spmv"].values
+        halo = agg["exchange_halo"].values
+        compute = np.clip(spmv - halo, 0.0, None)
+        # FIXME
+        # compute = agg["spmv"].values
+        # halo = agg["exchange_halo"].values
         x = np.arange(len(ranks))
         # ---- stacked bars
         ax.bar(
             x,
             compute,
-            bottom=allr,
+            bottom=halo,
             color=_with_alpha(base_color, 0.45),
             label="Compute",
         )
         ax.bar(
             x,
-            allr,
+            halo,
             color=_with_alpha(base_color, 0.85),
             label="Halo Exchange",
         )
@@ -492,7 +495,7 @@ def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", f
             edgecolor='black',
             facecolor='white'
         )
-    axes[0].set_ylabel("Time")
+    axes[0].set_ylabel("Time [s]")
     return fig, axes
     
 
@@ -557,7 +560,7 @@ def main():
         meta["grid"] = f'{meta["global_nx"]}x{meta["global_ny"]}x{meta["global_nz"]}'
 
     print("Metedata df:")
-    print(meta_df)
+    print(meta_df.sort_values(['cluster', 'partition', 'nodes']))
     print("\nGenerating plots...")
 
     # Generate all plots
@@ -569,24 +572,23 @@ def main():
     cluster_partitions = sorted(meta_df["cluster_partition"].unique())
 
     colors = create_color_map(cluster_partitions)
-
-    # for grid in grids:
-    grid = '128x128x128'
+ 
     for nodes in nodes_list:
-
         # select matching experiments
         pairs = query_meta_df_dict_pairs(
             meta_dfs_pairs,
             [("nodes", nodes)], # ("grid", grid)
         )
 
-        if len(pairs) != len(cluster_partitions):
-            warnings.warn(
-                f"[grid={grid}, nodes={nodes}] "
-                f"Expected {len(cluster_partitions)} experiments, "
-                f"got {len(pairs)} - skipping"
-            )
-            continue
+        # Ensure ALL grid sizes match
+        grid = None
+        for meta, _ in pairs:
+            if grid is None:
+                grid = meta['grid']
+            else:
+                if meta['grid'] != grid:
+                    warnings.warn(f'Found NON MATCHING grids in {nodes}-node experiments (prev grid: {grid}, curr meta: {meta})\nSkipping {nodes}-node experiments...')
+                    continue
 
         # normalize into cp -> dfs dict
         experiments = {
@@ -595,12 +597,12 @@ def main():
         }
         # print(pairs[0][1]['dotp'])
 
-        prefix = f"{args.outdir}/runtime_{grid}_{nodes}nodes"
+        prefix = f"{args.outdir}/runtime_{nodes}nodes"
 
         # ============================================================
         # 1) Kernel contribution stacked bar plot
         # ============================================================
-        fig, ax = plt.subplots(figsize=(6, 6))
+        fig, ax = plt.subplots(figsize=(10, 6))
         plot_kernel_runtime_breakdown(
             experiments=experiments,
             ax=ax,
@@ -616,6 +618,7 @@ def main():
         fig, ax = plot_dotp_breakdown(
             experiments=experiments,
             colors=colors,
+            aggregate='sum',
         )
         fig.tight_layout()
         fig.savefig(f"{prefix}_dotp_breakdown.png", dpi=150)
@@ -627,12 +630,13 @@ def main():
         fig, ax = plot_spmv_halo_breakdown(
             experiments=experiments,
             colors=colors,
+            aggregate='sum',
         )
         fig.tight_layout()
         fig.savefig(f"{prefix}_spmv_halo_breakdown.png", dpi=150)
         plt.close(fig)
 
-        fig, ax = plt.subplots(figsize=(4, 4))
+        fig, ax = plt.subplots(figsize=(6, 8))
         plot_precond_breakdown(
             experiments=experiments,
             colors=colors,
