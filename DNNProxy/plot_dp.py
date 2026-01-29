@@ -6,6 +6,7 @@ import sys
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.utils.plots import create_color_map, create_marker_map, format_bytes
+from py_utils.constants.machines import *
 from parser import *
 
 FONT_TITLE = 18
@@ -43,8 +44,8 @@ def plot_runtime_scaling(df, model_name, bucket_size=None, local_batch_size=None
 
         # runtime medio per step aggregando su rank e run
         job_df["run_index"] = job_df.groupby("rank").cumcount() % runs_per_rank
-        agg_df = job_df.groupby(["world_size", "run_index"])["runtime_s"].mean().reset_index()
-        mean_runtime = agg_df.groupby("world_size")["runtime_s"].mean()
+        agg_df = job_df.groupby(["world_size", "run_index"])["runtime"].mean().reset_index()
+        mean_runtime = agg_df.groupby("world_size")["runtime"].mean()
 
         # ordinamento per sicurezza
         ws = np.array(sorted(mean_runtime.index))
@@ -57,10 +58,11 @@ def plot_runtime_scaling(df, model_name, bucket_size=None, local_batch_size=None
         # ideal_runtime = np.full(ws.shape, rt[0], dtype=float)
         # # plt.plot(ws, ideal_runtime, "--", color=colors.get(net, "gray"), alpha=0.5, label="Ideal" if net==networks[0] else None)
 
-    plt.xlabel("World Size")
-    plt.ylabel("Time (s)")
-    plt.title(f"Data Parallel Scaling - Model: {model_name}, Local Batch: {local_batch_size}")
-    plt.xticks(ws)
+    plt.xlabel("Number of nodes")
+    plt.xticks(df.world_size.unique())
+    plt.ylabel("Runtime (s)")
+    plt.title(f"Data Parallelism Scaling") #- Model: {model_name}, Number of Buckets: {bucket_size}")
+    #plt.xticks(ws)
     plt.grid(True, linestyle="--", linewidth=0.5)
     plt.legend()
     plt.tight_layout()
@@ -68,7 +70,7 @@ def plot_runtime_scaling(df, model_name, bucket_size=None, local_batch_size=None
     output_dir = Path("plots")
     output_dir.mkdir(parents=True, exist_ok=True)
     bucket_str = f"_b{bucket_size}" if bucket_size is not None else ""
-    output_path = output_dir / f"dp_scaling_{model_name}{bucket_str}_lbs{local_batch_size}.png"
+    output_path = output_dir / f"dp_scaling_{model_name}{bucket_str}.png"
     plt.savefig(output_path)
 
 
@@ -103,7 +105,7 @@ def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "
 
         # Aggregate across ranks per run
         agg_df = (
-            job_df.groupby(["num_buckets", "run_index"])["barrier_time_s"]
+            job_df.groupby(["num_buckets", "run_index"])["barrier_time"]
                   .mean()
                   .reset_index()
         )
@@ -111,7 +113,7 @@ def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "
         label_net = networks_labels[net]
 
         for j, b in enumerate(buckets):
-            runs = agg_df[agg_df["num_buckets"] == b]["barrier_time_s"].values
+            runs = agg_df[agg_df["num_buckets"] == b]["barrier_time"].values
             # horizontal position: bucket index + network offset + small jitter
             x_positions = np.full_like(runs, j) + (i - 0.5) * 0.2 + (np.random.rand(len(runs)) - 0.5) * 0.05
             plt.scatter(
@@ -124,7 +126,7 @@ def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "
     plt.xticks(np.arange(len(buckets)), bucket_sizes_kib)
     plt.xlabel("Buckets (Msg size x bucket)")
     plt.ylabel("Barrier Time (s)")
-    plt.title(f"Barrier Time Distribution\nModel: {model_name}, World Size: {world_size}")
+    plt.title(f"Barrier Time Distribution")#\nModel: {model_name}, World Size: {world_size}")
     
     # Remove duplicate labels in legend
     handles, labels = plt.gca().get_legend_handles_labels()
@@ -140,22 +142,24 @@ def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "
     plt.savefig(output_path)
 
 if __name__ == "__main__":
-    df = get_metrics_dataframe('dp')
-    colors = create_color_map(["ib", "eth", "boost_usr_prod"])
-
+    csv_files = sys.argv[1:] if len(sys.argv) > 1 else ["metrics.csv"]
+    df = pd.concat([pd.read_csv(f) for f in csv_files], ignore_index=True)
+    colors = create_color_map(["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"])
     networks_labels = {
         "ib": "HAICGU-ib",
         "eth": "HAICGU-eth",
-        "boost_usr_prod": "boost_usr_prod",
+        "boost_usr_prod": "LEO",
+        "nanjing-inter": "NJ-inter",
+        "nanjing-intra": "NJ-intra"
     }
 
     plot_runtime_scaling(
         df,                     # your DataFrame
-        model_name="vit_h_16_128",
-        bucket_size=20,
-        local_batch_size=128,
-        runs_per_rank=50,
-        networks=["ib", "eth", "boost_usr_prod"],  # networks to plot
+        model_name="vit_b_16_32",
+        bucket_size=128,
+        local_batch_size=32,
+        runs_per_rank=10,
+        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],  # networks to plot
         colors=colors,
         networks_labels=networks_labels
     )
@@ -163,9 +167,9 @@ if __name__ == "__main__":
 
     plot_barrier_scatter_by_bucket(
         df,                     # your DataFrame
-        model_name="vit_h_16_128",
+        model_name="vit_b_16_32",
         world_size=4,            # number of ranks/nodes
-        networks=["ib", "eth", "boost_usr_prod"],  # networks to plot
+        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],  # networks to plot
         colors=colors,
         networks_labels=networks_labels
     )
