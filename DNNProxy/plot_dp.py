@@ -148,7 +148,7 @@ if __name__ == "__main__":
     networks_labels = {
         "ib": "HAICGU-ib",
         "eth": "HAICGU-eth",
-        "boost_usr_prod": "LEO",
+        "boost_usr_prod": "LEO-HAICGU",
         "nanjing-inter": "NJ-inter",
         "nanjing-intra": "NJ-intra"
     }

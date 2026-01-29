@@ -40,7 +40,7 @@ bool preconditioning = false;
 #include <ccutils/mpi/mpi_timers.hpp>
 #include <ccutils/mpi/mpi_macros.hpp>
 CCUTILS_MPI_TIMER_DEF(cg_times)
-CCUTILS_MPI_TIMER_DEF(spmv_times)
+// CCUTILS_MPI_TIMER_DEF(spmv_times)
 CCUTILS_MPI_TIMER_DEF(mg_times)
 CCUTILS_MPI_TIMER_DEF(dotp_times)
 CCUTILS_MPI_TIMER_DEF(waxpby_times)
@@ -112,7 +112,7 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
   // p is of length ncols, copy x to p for sparse MV operation
   CopyVector(x, p);
   #ifdef USE_CCUTILS_TIMERS
-    CCUTILS_MPI_TIMER_START(spmv_times); ComputeSPMV(A, p, Ap, tHalo); MPI_TIMER_STOP_CONDITIONAL(spmv_times);  // Ap = A*p
+    ComputeSPMV(A, p, Ap, tHalo);
   #else
     TICK(); ComputeSPMV(A, p, Ap, tHalo); TOCK(t3);  // Ap = A*p
   #endif
@@ -200,7 +200,7 @@ int CG(const SparseMatrix & A, CGData & data, const Vector & b, Vector & x,
     }
 
     #ifdef USE_CCUTILS_TIMERS
-      CCUTILS_MPI_TIMER_START(spmv_times); ComputeSPMV(A, p, Ap, tHalo); MPI_TIMER_STOP_CONDITIONAL(spmv_times); // Ap = A*p
+      ComputeSPMV(A, p, Ap, tHalo);
     #else
       TICK(); ComputeSPMV(A, p, Ap, tHalo); TOCK(t3); // Ap = A*p
     #endif

@@ -35,6 +35,17 @@
 #define TICK()  t0 = mytimer() //!< record current time in 't0'
 #define TOCK(t) t += mytimer() - t0 //!< store time difference in 't' using time in 't0'
 
+#include <ccutils/mpi/mpi_timers.hpp>
+#include <ccutils/mpi/mpi_macros.hpp>
+extern bool collect_info;
+extern bool preconditioning;
+CCUTILS_MPI_TIMER_DEF(spmv_times)
+
+#define MPI_TIMER_STOP_CONDITIONAL(timer) \
+  CCUTILS_MPI_TIMER_STOP(timer)           \
+  if(!collect_info)                       \
+    __timer_vals_##timer.pop_back();
+
 /*!
   Routine to compute matrix vector product y = Ax where:
   Precondition: First call exchange_externals to get off-processor values of x
@@ -59,6 +70,7 @@ int ComputeSPMV_ref( const SparseMatrix & A, Vector & x, Vector & y, double &hal
   //double t0 = 0.0;
   ExchangeHalo(A,x, "SPMV");
 #endif
+  CCUTILS_MPI_TIMER_START(spmv_times)
   const double * const xv = x.values;
   double * const yv = y.values;
   const local_int_t nrow = A.localNumberOfRows;
@@ -75,5 +87,6 @@ int ComputeSPMV_ref( const SparseMatrix & A, Vector & x, Vector & y, double &hal
       sum += cur_vals[j]*xv[cur_inds[j]];
     yv[i] = sum;
   }
+  CCUTILS_MPI_TIMER_STOP_CONDITIONAL(spmv_times)
   return 0;
 }
