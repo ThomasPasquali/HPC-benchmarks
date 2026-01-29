@@ -60,7 +60,7 @@ def plot_runtime_scaling(df, model_name, bucket_size=None, local_batch_size=None
 
     plt.xlabel("Number of nodes")
     plt.xticks(df.world_size.unique())
-    plt.ylabel("Runtime (s)")
+    plt.ylabel("Total runtime (s)")
     plt.title(f"Data Parallelism Scaling") #- Model: {model_name}, Number of Buckets: {bucket_size}")
     #plt.xticks(ws)
     plt.grid(True, linestyle="--", linewidth=0.5)
@@ -75,22 +75,24 @@ def plot_runtime_scaling(df, model_name, bucket_size=None, local_batch_size=None
 
 
 def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "eth"], colors=None, networks_labels=None, runs_per_rank=50):
-    """
-    Scatter plot of barrier times per run, aggregated across ranks.
-    Runs are assumed to be ordered and equal across ranks.
-    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+
     if colors is None:
         colors = {"ib": "orange", "eth": "blue"}
-    
+    if networks_labels is None:
+        networks_labels = {net: net for net in networks}
+
     filtered_df = df[df["model_name"] == model_name]
     buckets = sorted(filtered_df["num_buckets"].unique())
 
-    # Compute MiB labels for x-axis
-    bucket_sizes_kib = []
+    # x-axis labels
+    bucket_labels = []
     for b in buckets:
         mean_bytes = filtered_df[filtered_df["num_buckets"] == b]["msg_size_avg_bytes"].mean()
         mib = format_bytes(mean_bytes, binary=True)
-        bucket_sizes_kib.append(f"{b} buckets\n{mib}")
+        bucket_labels.append(f"{b} buckets\n{mib}")
 
     plt.figure(figsize=(10,6))
 
@@ -100,46 +102,175 @@ def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "
             (filtered_df["world_size"] == world_size)
         ].copy()
 
-        # Assign run index manually per rank
         job_df["run_index"] = job_df.groupby("rank").cumcount() % runs_per_rank
 
-        # Aggregate across ranks per run
         agg_df = (
             job_df.groupby(["num_buckets", "run_index"])["barrier_time"]
                   .mean()
                   .reset_index()
         )
 
-        label_net = networks_labels[net]
-
         for j, b in enumerate(buckets):
             runs = agg_df[agg_df["num_buckets"] == b]["barrier_time"].values
-            # horizontal position: bucket index + network offset + small jitter
-            x_positions = np.full_like(runs, j) + (i - 0.5) * 0.2 + (np.random.rand(len(runs)) - 0.5) * 0.05
+            if len(runs) == 0:
+                continue
+            # base x = bucket index + network offset + small jitter
+            x_positions = np.full_like(runs, j, dtype=float) + (i - (len(networks)-1)/2) * 0.2 + (np.random.rand(len(runs)) - 0.5) * 0.05
             plt.scatter(
                 x_positions, runs,
                 color=colors.get(net, "gray"),
                 alpha=0.7,
-                label=label_net if j==0 else ""
+                label=networks_labels[net] if j==0 else ""
             )
 
-    plt.xticks(np.arange(len(buckets)), bucket_sizes_kib)
+    # Get y-limits AFTER scatter points
+    ymin, ymax = plt.ylim()
+
+    # Draw vertical lines exactly between buckets
+    for j in range(1, len(buckets)):
+        plt.vlines(
+            x=j - 0.5,  # halfway between buckets
+            ymin=ymin,
+            ymax=ymax,
+            color="gray",
+            linestyle="--",
+            linewidth=2.0,
+            alpha=0.5,
+            zorder=0  # behind scatter
+        )
+
+    plt.xticks(np.arange(len(buckets)), bucket_labels)
     plt.xlabel("Buckets (Msg size x bucket)")
     plt.ylabel("Barrier Time (s)")
-    plt.title(f"Barrier Time Distribution")#\nModel: {model_name}, World Size: {world_size}")
-    
-    # Remove duplicate labels in legend
+    plt.title(f"Barrier Time Distribution")
+
+    # Remove duplicate legend entries
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = dict(zip(labels, handles))
     plt.legend(by_label.values(), by_label.keys())
-    
+
     plt.grid(True, linestyle="--", linewidth=0.5)
     plt.tight_layout()
-    #save png to file
+
     output_dir = Path("plots")
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"barrier_scatter_{model_name}_ws{world_size}.png"
     plt.savefig(output_path)
+def plot_runtime_with_barrier_stacked(
+    df,
+    model_name,
+    bucket_size=None,
+    local_batch_size=None,
+    runs_per_rank=50,
+    networks=["ib", "eth"],
+    colors=None,
+    networks_labels=None,
+):
+    """
+    Stacked bar plot showing runtime per step vs world_size,
+    where total bar height is runtime and a portion represents barrier time.
+    Legend shows runtime per network and a single symbol for barrier time.
+    """
+
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+    import matplotlib.patches as mpatches
+
+    if colors is None:
+        colors = {"ib": "orange", "eth": "blue"}
+    if networks_labels is None:
+        networks_labels = {net: net for net in networks}
+
+    filtered_df = df[df["model_name"] == model_name]
+    if bucket_size is not None:
+        filtered_df = filtered_df[filtered_df["num_buckets"] == bucket_size]
+
+    plt.figure(figsize=(12, 6))
+
+    world_sizes = sorted(filtered_df["world_size"].unique())
+    x = np.arange(len(world_sizes))
+    width = 0.15
+
+    for i, net in enumerate(networks):
+        job_df = filtered_df[filtered_df["network"] == net].copy()
+        if job_df.empty:
+            continue
+
+        # Group runs per rank
+        job_df["run_index"] = job_df.groupby("rank").cumcount() % runs_per_rank
+
+        agg_df = (
+            job_df.groupby(["world_size", "run_index"])
+            .agg(
+                runtime=("runtime", "mean"),
+                barrier_time=("barrier_time", "mean"),
+            )
+            .reset_index()
+        )
+
+        mean_data = agg_df.groupby("world_size")[["runtime", "barrier_time"]].mean()
+
+        compute_times = [
+            mean_data.loc[ws, "runtime"] - mean_data.loc[ws, "barrier_time"]
+            if ws in mean_data.index
+            else 0
+            for ws in world_sizes
+        ]
+
+        barrier_times = [
+            mean_data.loc[ws, "barrier_time"] if ws in mean_data.index else 0
+            for ws in world_sizes
+        ]
+
+        offset = (i - len(networks) / 2) * width
+        color = colors.get(net, "gray")
+
+        # Runtime portion (bottom)
+        plt.bar(
+            x + offset,
+            compute_times,
+            width,
+            color=color,
+            alpha=0.8,
+            label=networks_labels.get(net, net),
+        )
+
+        # Barrier portion (top)
+        plt.bar(
+            x + offset,
+            barrier_times,
+            width,
+            bottom=compute_times,
+            color=color,
+            alpha=0.4,
+            edgecolor='black',
+            hatch="//",
+            label="_nolegend_",
+        )
+
+    # Build clean legend
+    import matplotlib.patches as mpatches
+    runtime_patches = [
+        mpatches.Patch(color=colors.get(net, "gray"), label=networks_labels.get(net, net))
+        for net in networks
+    ]
+    barrier_patch = mpatches.Patch(facecolor='white', edgecolor='black', hatch='//', label='Barrier time')
+    plt.legend(handles=runtime_patches + [barrier_patch], fontsize=10)
+
+    plt.xlabel("Number of nodes")
+    plt.xticks(x, world_sizes)
+    plt.ylabel("Total runtime (s)")
+    plt.title("Runtime Breakdown")
+    plt.grid(True, linestyle="--", linewidth=0.5, axis="y")
+    plt.tight_layout()
+
+    output_dir = Path("plots")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    bucket_str = f"_b{bucket_size}" if bucket_size is not None else ""
+    output_path = output_dir / f"runtime_barrier_stacked_{model_name}{bucket_str}.png"
+    plt.savefig(output_path)
+
 
 if __name__ == "__main__":
     csv_files = sys.argv[1:] if len(sys.argv) > 1 else ["metrics.csv"]
@@ -169,6 +300,17 @@ if __name__ == "__main__":
         df,                     # your DataFrame
         model_name="vit_b_16_32",
         world_size=4,            # number of ranks/nodes
+        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],  # networks to plot
+        colors=colors,
+        networks_labels=networks_labels
+    )
+
+    plot_runtime_with_barrier_stacked(
+        df,                     # your DataFrame
+        model_name="vit_b_16_32",
+        bucket_size=128,
+        local_batch_size=32,
+        runs_per_rank=10,
         networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],  # networks to plot
         colors=colors,
         networks_labels=networks_labels
