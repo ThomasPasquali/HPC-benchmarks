@@ -560,9 +560,9 @@ def main():
     print(meta_df)
     print("\nGenerating plots...")
 
-    # FIXME uncomment Generate all plots
-    # plot_gflops_scaling(meta_df, args.outdir)
-    # plot_runtime_scaling(meta_df, args.outdir)
+    # Generate all plots
+    plot_gflops_scaling(meta_df, args.outdir)
+    plot_runtime_scaling(meta_df, args.outdir)
 
     grids = sorted(meta_df["grid"].unique())
     nodes_list = sorted(meta_df["nodes"].astype(int).unique())
@@ -572,7 +572,7 @@ def main():
 
     # for grid in grids:
     grid = '128x128x128'
-    for nodes in [1, 2, 4]:
+    for nodes in nodes_list:
 
         # select matching experiments
         pairs = query_meta_df_dict_pairs(

@@ -25,6 +25,8 @@ CACHE_SIZES = {
 
 CLUSTER_NAMES_MAP = {
   'nanjing': 'NJ',
+  'nanjing-inter': 'NJ',
+  'nanjing-intra': 'NJ',
   'haicgu': 'HAICGU',
   'leonardo': 'LEO',
   'local': 'local',
@@ -36,6 +38,8 @@ PARTITION_NAMES_MAP = {
   'NSLB': 'nslb',
   'plain': 'default',
   'boost_usr_prod': 'booster',
+  'nanjing-inter': 'inter',
+  'nanjing-intra': 'intra',
   # Debug
   'test': 'test',
   'other': 'other',

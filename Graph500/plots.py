@@ -10,6 +10,7 @@ import argparse
 sys.path.append(str(Path(__file__).parent.parent / "machines"))
 from Leonardo.nodelists_generator import LeonardoNodelistGenerator
 from HAICGU.nodes_map import HAICGUNodesMap
+from Nanjing.nodes_map import NanjingNodesMap
 
 sys.path.append(str(Path(__file__).parent.parent))
 from py_utils.constants.plots import *
@@ -140,7 +141,7 @@ def plot_binned_boxplots(df: pd.DataFrame, title: str, outfile: Path, bins=6):
     plt.xticks(
         ticks=[i for i in range(len(bin_list))],
         labels=[
-            f"[{format_bytes(max(b.left, 0), precision=1, binary=True)}, {format_bytes(b.right, precision=1, binary=True)}]"
+            f"[{format_bytes(max(b.left, 0), precision=0, binary=True)}, {format_bytes(b.right, precision=0, binary=True)}]"
             for b in bin_list
         ],
         rotation=40,
@@ -312,10 +313,14 @@ def main():
     meta_df_dict_pairs, meta_df = import_export.read_multiple_from_parquet(
         args.parquet_files
     )
-    import_export.describe_pairs_content(meta_df_dict_pairs)
+    import_export.describe_pairs_content(meta_df_dict_pairs, verbose=False)
 
     if meta_df is None:
         raise Exception("meta_df is None")
+    
+    # Remove old data
+    meta_df = meta_df[~meta_df["buffer_size"].str.contains("buf")]
+    print(meta_df)
 
     meta_df["cluster"] = meta_df["cluster"].map(CLUSTER_NAMES_MAP)
     meta_df["partition"] = meta_df["partition"].map(PARTITION_NAMES_MAP)
@@ -326,24 +331,34 @@ def main():
         meta_df["buffer_size"].map(lambda x: parse_bytes(x, True)).astype(int)
     )
 
+    # Collect indices to keep
+    indices_to_keep = []
     leo_gen = LeonardoNodelistGenerator()
-    haicgu_gen = HAICGUNodesMap()
-    for meta, df_dict in meta_df_dict_pairs:
+    
+    for idx, (meta, df_dict) in enumerate(meta_df_dict_pairs):
+        if 'buf' in meta['buffer_size']:
+            continue
         meta["cluster"] = CLUSTER_NAMES_MAP[meta["cluster"]]
         meta["partition"] = PARTITION_NAMES_MAP[meta["partition"]]
         meta["cluster_partition"] = f'{meta["cluster"]}-{meta["partition"]}'
         cluster_name = meta["cluster"]
+        if not meta.get("rank_node_map"):
+            continue
         ranks_nodes_map = meta["rank_node_map"]
         if df_dict.get("packets") is None:
             continue
         df = df_dict["packets"]
+        indices_to_keep.append(idx)
 
         gen = None
         if cluster_name == CLUSTER_NAMES_MAP["leonardo"]:
             gen = leo_gen
         elif cluster_name == CLUSTER_NAMES_MAP["haicgu"]:
-            gen = haicgu_gen
+            gen = HAICGUNodesMap()
+        elif cluster_name == CLUSTER_NAMES_MAP["nanjing"]:
+            gen = NanjingNodesMap()
         # Add here more distances scripts
+        
         if gen is not None:
             df["distance"] = df.apply(
                 lambda row: gen.get_node_distance(
@@ -358,6 +373,12 @@ def main():
             )
             df["distance"] = -1
             continue
+    
+    # Filter meta_df_dict_pairs
+    meta_df_dict_pairs = [meta_df_dict_pairs[i] for i in indices_to_keep]
+    
+    # print(meta_df)
+    # exit()
 
     Path(args.outdir / "scatter").mkdir(parents=True, exist_ok=True)
     Path(args.outdir / "boxplot").mkdir(parents=True, exist_ok=True)
