@@ -16,6 +16,7 @@ test_and_run_all_nj.sh
 *results_old/
 *results_*/
 *plots/
+*plots_/
 
 */test.py
 **__pycache__

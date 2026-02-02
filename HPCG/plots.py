@@ -9,6 +9,7 @@ Generates scaling plots comparing clusters and partitions.
 """
 
 import argparse
+from collections import Counter
 import sys
 import warnings
 import matplotlib.pyplot as plt
@@ -24,6 +25,7 @@ from py_utils.utils.plots import (
     create_color_map,
     create_linestyle_map,
     create_marker_map,
+    format_bytes,
 )
 import py_utils.import_export as import_export
 
@@ -188,70 +190,82 @@ def plot_kernel_runtime_breakdown(
 
     return ax
 
-
-def plot_precond_breakdown(experiments: dict, colors: dict, ax=None):
+def plot_precond_breakdown(
+    experiments: dict,
+    colors: dict,
+    ax=None,
+    aggregate: str = "sum",  # "sum" or "avg"
+):
     """
     Preconditioner (MG) breakdown:
-      - For each MG iteration, calculate its 10 associated halo exchanges
-      - Bar shows mean MG time split into computation vs communication
+      - Uses ALL halo_precond times
+      - Aggregation can be 'sum' or 'avg'
     """
+    if aggregate not in {"sum", "avg"}:
+        raise ValueError("aggregate must be either 'sum' or 'avg'")
+
     if ax is None:
         fig, ax = plt.subplots(figsize=(6, 8))
 
     cps = list(experiments.keys())
     x = np.arange(len(cps))
 
+    agg_fn = np.sum if aggregate == "sum" else np.mean
+
     for i, cp in enumerate(cps):
         df_mg = experiments[cp]["mg"]
         df_halo = experiments[cp]["halo_precond"]
-        
-        num_mg_iters = len(df_mg)
-        halo_per_mg = 10
-        
-        # For each MG iteration, calculate its communication overhead
-        mg_times = []
-        comm_times = []
-        comp_times = []
-        
-        for mg_idx in range(num_mg_iters):
-            mg_time = df_mg.iloc[mg_idx]["mg"]
-            
-            # Get the 10 halo exchanges for THIS MG iteration
-            start_idx = mg_idx * halo_per_mg
-            end_idx = start_idx + halo_per_mg
-            halo_sum = df_halo.iloc[start_idx:end_idx]["exchange_halo"].sum()
-            
-            mg_times.append(mg_time)
-            comm_times.append(halo_sum)
-            comp_times.append(mg_time - halo_sum)
-        
-        # Calculate means
-        mean_comm = np.mean(comm_times)
-        mean_comp = np.mean(comp_times)
-        comm_pct = 100 * mean_comm / (mean_comp + mean_comm) if (mean_comp + mean_comm) > 0 else 0
-        
-        # Stacked bar: computation + communication
-        ax.bar(i, mean_comp, color='steelblue', 
-               edgecolor='black', linewidth=0.5, 
-               label='Computation' if i == 0 else '')
-        ax.bar(i, mean_comm, bottom=mean_comp, 
-               color='coral', edgecolor='black', linewidth=0.5,
-               label='Communication' if i == 0 else '')
-        
-        # Annotate with communication percentage
-        if comm_pct > 3:  # Only show if visible
-            ax.text(i, mean_comp + mean_comm / 2, f'{comm_pct:.1f}%',
-                    ha='center', va='center', fontsize=10, 
-                    color='white', fontweight='bold')
 
-        ax.set_xticks(x)
-        ax.set_xticklabels(cps, rotation=30, ha="right")
-        ax.set_ylabel("Time [s]")
-        # ax.set_title("Preconditioner Breakdown")
-        ax.legend(loc='best')
-        ax.grid(True, axis='y', linestyle='--', alpha=0.3)
+        # Aggregate MG and halo times
+        mg_time = agg_fn(df_mg["mg"])
+        halo_time = agg_fn(df_halo["exchange_halo"])
+
+        comp_time = mg_time - halo_time
+        comp_time = max(comp_time, 0.0)  # safety against negative noise
+
+        total_time = comp_time + halo_time
+        comm_pct = 100 * halo_time / total_time if total_time > 0 else 0
+
+        # Stacked bar
+        ax.bar(
+            i,
+            comp_time,
+            color="steelblue",
+            edgecolor="black",
+            linewidth=0.5,
+            label="Computation" if i == 0 else "",
+        )
+        ax.bar(
+            i,
+            halo_time,
+            bottom=comp_time,
+            color="coral",
+            edgecolor="black",
+            linewidth=0.5,
+            label="Communication" if i == 0 else "",
+        )
+
+        # Annotate communication percentage
+        if comm_pct > 3:
+            ax.text(
+                i,
+                comp_time + halo_time / 2,
+                f"{comm_pct:.1f}%",
+                ha="center",
+                va="center",
+                fontsize=10,
+                color="white",
+                fontweight="bold",
+            )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(cps, rotation=30, ha="right")
+    ax.set_ylabel("Time [s]")
+    ax.legend(loc="best")
+    ax.grid(True, axis="y", linestyle="--", alpha=0.3)
 
     return ax
+
 
 def _with_alpha(color, alpha):
     r, g, b, _ = to_rgba(color)
@@ -497,7 +511,59 @@ def plot_spmv_halo_breakdown(experiments: dict, colors: dict, aggregate="sum", f
         )
     axes[0].set_ylabel("Time [s]")
     return fig, axes
+
+def plot_halo_message_size_histograms(
+    experiments: dict,
+):
+    fig, axes = plt.subplots(1, 2, figsize=(10, 6))
+
+    spmv_sizes = []
+    precond_sizes = []
     
+    def flatten_to_int_list(values):
+        out = []
+        for v in values:
+            if isinstance(v, (list, tuple, np.ndarray)):
+                out.extend(int(x) for x in np.asarray(v).ravel())
+            else:
+                out.append(int(v))
+        return out
+
+    for _, exp in experiments.items():
+        if "spmv_halo" in exp:
+            spmv_sizes.extend(
+                flatten_to_int_list(exp["spmv_halo"]["halo_msg_size_bytes"].dropna())
+            )
+        if "halo_precond" in exp:
+            precond_sizes.extend(
+                flatten_to_int_list(exp["halo_precond"]["halo_msg_size_bytes"].dropna())
+            )
+
+    def plot_counter(ax, sizes, title):
+        counts = dict(sorted(Counter(sizes).items(), reverse=False))
+
+        xs = np.arange(len(counts))
+        heights = list(counts.values())
+
+        labels = [
+            format_bytes(size, precision=0, binary=True)
+            for size in counts.keys()
+        ]
+
+        ax.bar(xs, heights, edgecolor="black")
+        ax.set_xticks(xs)
+        ax.set_xticklabels(labels, rotation=45, ha="right")
+        ax.set_title(title)
+        ax.set_ylabel("Frequency")
+        ax.grid(True, axis="y", linestyle="--", alpha=0.3)
+
+    plot_counter(axes[0], spmv_sizes, "SpMV Halo")
+    plot_counter(axes[1], precond_sizes, "Preconditioner Halo")
+
+    axes[0].set_xlabel("Message size")
+    axes[1].set_xlabel("Message size")
+
+    return fig, axes
 
 
 def main():
@@ -572,6 +638,14 @@ def main():
     cluster_partitions = sorted(meta_df["cluster_partition"].unique())
 
     colors = create_color_map(cluster_partitions)
+    
+    outdir = Path(args.outdir)
+    (outdir / 'kernels').mkdir(parents=True, exist_ok=True)
+    (outdir / 'mg').mkdir(parents=True, exist_ok=True)
+    (outdir / 'spmv').mkdir(parents=True, exist_ok=True)
+    (outdir / 'ddotp').mkdir(parents=True, exist_ok=True)
+    (outdir / 'msgsize').mkdir(parents=True, exist_ok=True)
+    DPI = 200
  
     for nodes in nodes_list:
         # select matching experiments
@@ -595,9 +669,6 @@ def main():
             meta["cluster_partition"]: dfs
             for meta, dfs in pairs
         }
-        # print(pairs[0][1]['dotp'])
-
-        prefix = f"{args.outdir}/runtime_{nodes}nodes"
 
         # ============================================================
         # 1) Kernel contribution stacked bar plot
@@ -609,7 +680,7 @@ def main():
         )
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
         fig.tight_layout()
-        fig.savefig(f"{prefix}_kernel_breakdown.png", dpi=150)
+        fig.savefig(outdir / 'kernels' / f"{nodes}nodes_kernel_breakdown.png", dpi=DPI)
         plt.close(fig)
 
         # ============================================================
@@ -621,7 +692,7 @@ def main():
             aggregate='sum',
         )
         fig.tight_layout()
-        fig.savefig(f"{prefix}_dotp_breakdown.png", dpi=150)
+        fig.savefig(outdir / 'ddotp' / f"{nodes}nodes_ddotp_breakdown.png", dpi=DPI)
         plt.close(fig)
 
         # ============================================================
@@ -633,9 +704,12 @@ def main():
             aggregate='sum',
         )
         fig.tight_layout()
-        fig.savefig(f"{prefix}_spmv_halo_breakdown.png", dpi=150)
+        fig.savefig(outdir / 'spmv' / f"{nodes}nodes_spmv_halo_breakdown.png", dpi=DPI)
         plt.close(fig)
 
+        # ============================================================
+        # 4) MG breakdown
+        # ============================================================
         fig, ax = plt.subplots(figsize=(6, 8))
         plot_precond_breakdown(
             experiments=experiments,
@@ -643,8 +717,22 @@ def main():
             ax=ax,
         )
         fig.tight_layout()
-        fig.savefig(f"{prefix}_precond_breakdown.png", dpi=150)
+        fig.savefig(outdir / 'mg' / f"{nodes}nodes_precond_breakdown.png", dpi=DPI)
         plt.close(fig)
+        
+        
+        # ============================================================
+        # 5) Message sizes
+        # ============================================================
+        if nodes > 1:
+            # Just to double check coherent results
+            for cluster_partition in experiments.keys():
+                fig, ax = plot_halo_message_size_histograms(
+                    experiments={cluster_partition: experiments[cluster_partition]},
+                )
+                fig.tight_layout()
+                fig.savefig(outdir / 'msgsize' / f"{cluster_partition}_{nodes}nodes_message_sizes.png", dpi=150)
+                plt.close(fig)
 
     print("\nAll plots generated successfully!")
 

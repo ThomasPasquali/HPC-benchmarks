@@ -245,14 +245,14 @@ def plot_packet_size_histogram(
             for b in bin_list
         ],
         rotation=40,
-        fontsize=FONT_TICKS - 2,
+        fontsize=FONT_TICKS,
     )
     plt.title(title)
 
     plt.legend(
-        loc="center left",
-        bbox_to_anchor=(1, 0.5),
-        fontsize=8,
+        loc='best',
+        # loc="center left",
+        # bbox_to_anchor=(1, 0.5),
         frameon=True,
     )
 
@@ -324,7 +324,10 @@ def plot_scaling(
                 figsize=(cols * 8, rows * 5),
                 # sharey=True,
             )
-            axes = axes.flatten()
+            if n == 1:
+                axes = [axes]
+            else:
+                axes = axes.flatten()
             subplot_groups = sorted(list(scale_group.groupby(subplot_by)), key=lambda t: parse_bytes(t[0], True) if subplot_by == 'buffer_size' else t[0])
 
         # --- plot each (sub)group ---
@@ -509,7 +512,8 @@ def main():
         raise Exception("meta_df is None")
 
     # Remove old data
-    meta_df = meta_df[~meta_df["buffer_size"].str.contains("buf")]
+    # meta_df = meta_df[(~meta_df["buffer_size"].str.contains("buf")) & (meta_df["buffer_size"] != '512KiB')]
+    meta_df = meta_df[(~meta_df["buffer_size"].str.contains("buf"))]
 
     meta_df["cluster"] = meta_df["cluster"].map(CLUSTER_NAMES_MAP)
     meta_df["partition"] = meta_df["partition"].map(PARTITION_NAMES_MAP)
@@ -532,6 +536,8 @@ def main():
     for idx, (meta, df_dict) in enumerate(meta_df_dict_pairs):
         if "buf" in meta["buffer_size"]:
             continue
+        # if meta["buffer_size"] == '512KiB':
+        #     continue
         meta["cluster"] = CLUSTER_NAMES_MAP[meta["cluster"]]
         meta["partition"] = PARTITION_NAMES_MAP[meta["partition"]]
         meta["cluster_partition"] = f'{meta["cluster"]}-{meta["partition"]}'
@@ -612,6 +618,10 @@ def main():
         #     warnings.warn(f'Duplicated experiment for {nodes=} {scale=}, {ef=}, {buffer_size=}')
 
         # Message size plot
+        if len(pairs) < 1:
+            warnings.warn(f'No data for {nodes=} {scale=}, {ef=}, {buffer_size=}')
+            continue
+        
         plot_packet_size_histogram(
             pairs[0][1]["packets"],
             title="Packet Size Distribution",
