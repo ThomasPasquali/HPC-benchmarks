@@ -22,14 +22,19 @@ plt.rc('legend', fontsize=FONT_LEGEND)  # legend fontsize
 plt.rc('figure', titlesize=FONT_TITLE)  # fontsize of the figure title
 
 
-def plot_runtime_scaling(df, model_name, bucket_size=None, local_batch_size=None, runs_per_rank=50, networks=["ib", "eth"], colors=None, networks_labels=None):
+def plot_runtime_scaling(df, model_name, bucket_size=None, local_batch_size=None, runs_per_rank=50, networks=["ib", "eth"], colors=None, networks_labels=None, linestyles=None):
     """
-    Plot runtime per step vs world_size for data parallel scaling. Ideal scaling is a flat line starting from the first world_size.
+    Plot samples/s vs world_size for data parallel scaling. Ideal scaling is a linear increase.
     """
     if colors is None:
         colors = {"ib": "orange", "eth": "blue"}
     if networks_labels is None:
         networks_labels = {net: net for net in networks}
+    if linestyles is None:
+        linestyles = {net: "-" for net in networks}
+    
+    if local_batch_size is None:
+        raise ValueError("local_batch_size must be provided to calculate samples/s")
     
     filtered_df = df[df["model_name"] == model_name]
     if bucket_size is not None:
@@ -50,19 +55,18 @@ def plot_runtime_scaling(df, model_name, bucket_size=None, local_batch_size=None
         # ordinamento per sicurezza
         ws = np.array(sorted(mean_runtime.index))
         rt = mean_runtime.loc[ws].values
+        
+        # Calculate samples/s: (local_batch_size * world_size) / runtime
+        samples_per_sec = (local_batch_size * ws) / rt
 
         label_net = networks_labels.get(net, net)
-        plt.plot(ws, rt, "o-", color=colors.get(net, "gray"), label=label_net)
-
-        # linea ideale: runtime costante al valore del primo world_size
-        # ideal_runtime = np.full(ws.shape, rt[0], dtype=float)
-        # # plt.plot(ws, ideal_runtime, "--", color=colors.get(net, "gray"), alpha=0.5, label="Ideal" if net==networks[0] else None)
+        plt.plot(ws, samples_per_sec, "o", linestyle=linestyles.get(net, "-"), 
+                color=colors.get(net, "gray"), label=label_net, markersize=6)
 
     plt.xlabel("Number of nodes")
     plt.xticks(df.world_size.unique())
-    plt.ylabel("Total runtime (s)")
-    plt.title(f"Data Parallelism Scaling") #- Model: {model_name}, Number of Buckets: {bucket_size}")
-    #plt.xticks(ws)
+    plt.ylabel("Samples/s")
+    plt.title(f"Data Parallelism Scaling")
     plt.grid(True, linestyle="--", linewidth=0.5)
     plt.legend()
     plt.tight_layout()
@@ -74,7 +78,7 @@ def plot_runtime_scaling(df, model_name, bucket_size=None, local_batch_size=None
     plt.savefig(output_path)
 
 
-def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "eth"], colors=None, networks_labels=None, runs_per_rank=50):
+def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "eth"], colors=None, networks_labels=None, runs_per_rank=50, markers=None):
     import numpy as np
     import matplotlib.pyplot as plt
     from pathlib import Path
@@ -83,6 +87,8 @@ def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "
         colors = {"ib": "orange", "eth": "blue"}
     if networks_labels is None:
         networks_labels = {net: net for net in networks}
+    if markers is None:
+        markers = {net: "o" for net in networks}
 
     filtered_df = df[df["model_name"] == model_name]
     buckets = sorted(filtered_df["num_buckets"].unique())
@@ -119,6 +125,7 @@ def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "
             plt.scatter(
                 x_positions, runs,
                 color=colors.get(net, "gray"),
+                marker=markers.get(net, "o"),
                 alpha=0.7,
                 label=networks_labels[net] if j==0 else ""
             )
@@ -156,6 +163,8 @@ def plot_barrier_scatter_by_bucket(df, model_name, world_size, networks=["ib", "
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = output_dir / f"barrier_scatter_{model_name}_ws{world_size}.png"
     plt.savefig(output_path)
+
+    
 def plot_runtime_with_barrier_stacked(
     df,
     model_name,
@@ -165,6 +174,7 @@ def plot_runtime_with_barrier_stacked(
     networks=["ib", "eth"],
     colors=None,
     networks_labels=None,
+    hatches=None,
 ):
     """
     Stacked bar plot showing runtime per step vs world_size,
@@ -181,6 +191,8 @@ def plot_runtime_with_barrier_stacked(
         colors = {"ib": "orange", "eth": "blue"}
     if networks_labels is None:
         networks_labels = {net: net for net in networks}
+    if hatches is None:
+        hatches = {net: "//" for net in networks}
 
     filtered_df = df[df["model_name"] == model_name]
     if bucket_size is not None:
@@ -245,9 +257,29 @@ def plot_runtime_with_barrier_stacked(
             color=color,
             alpha=0.4,
             edgecolor='black',
-            hatch="//",
+            hatch=hatches.get(net, "//"),
             label="_nolegend_",
         )
+        
+        # Add percentage labels on the barrier portion
+        for j, ws in enumerate(world_sizes):
+            if ws in mean_data.index:
+                total_runtime = mean_data.loc[ws, "runtime"]
+                barrier_time = mean_data.loc[ws, "barrier_time"]
+                if total_runtime > 0:
+                    percentage = (barrier_time / total_runtime) * 100
+                    # Position text at the middle of the barrier portion
+                    y_pos = compute_times[j] + barrier_times[j] / 2
+                    plt.text(
+                        j + offset,
+                        y_pos,
+                        f'{percentage:.1f}%',
+                        ha='center',
+                        va='center',
+                        fontsize=8,
+                        fontweight='bold',
+                        color='black'
+                    )
 
     # Build clean legend
     import matplotlib.patches as mpatches
@@ -275,7 +307,43 @@ def plot_runtime_with_barrier_stacked(
 if __name__ == "__main__":
     csv_files = sys.argv[1:] if len(sys.argv) > 1 else ["metrics.csv"]
     df = pd.concat([pd.read_csv(f) for f in csv_files], ignore_index=True)
-    colors = create_color_map(["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"])
+    
+    all_networks = ["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"]
+    
+    # For scaling plot and scatter plot: use shared colors for same groups
+    base_colors_grouped = create_color_map(["nanjing", "haicgu", "leo"])
+    colors_grouped = {
+        "nanjing-inter": base_colors_grouped["nanjing"],
+        "nanjing-intra": base_colors_grouped["nanjing"],
+        "ib": base_colors_grouped["haicgu"],
+        "eth": base_colors_grouped["haicgu"],
+        "boost_usr_prod": base_colors_grouped["leo"]
+    }
+    
+    # For stacked plot: use unique colors for each network
+    colors_unique = create_color_map(all_networks)
+    
+    # Define linestyles: differentiate within same color group (for scaling plot)
+    linestyles = {
+        "nanjing-inter": "-",      # solid
+        "nanjing-intra": "--",     # dashed
+        "ib": "-",                 # solid
+        "eth": "--",               # dashed
+        "boost_usr_prod": "-"      # solid
+    }
+    
+    # Use create_marker_map for scatter plots
+    markers = create_marker_map(all_networks)
+    
+    # For hatches in stacked bar - differentiate networks
+    hatches = {
+        "nanjing-inter": "//",
+        "nanjing-intra": "\\\\",
+        "ib": "//",
+        "eth": "\\\\",
+        "boost_usr_prod": "xx"
+    }
+    
     networks_labels = {
         "ib": "HAICGU-ib",
         "eth": "HAICGU-eth",
@@ -284,34 +352,61 @@ if __name__ == "__main__":
         "nanjing-intra": "NJ-intra"
     }
 
+    # Scaling plot: use grouped colors + linestyles
     plot_runtime_scaling(
-        df,                     # your DataFrame
+        df,
         model_name="vit_b_16_32",
         bucket_size=128,
         local_batch_size=32,
         runs_per_rank=10,
-        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],  # networks to plot
-        colors=colors,
-        networks_labels=networks_labels
+        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],
+        colors=colors_grouped,
+        networks_labels=networks_labels,
+        linestyles=linestyles
     )
 
-
-    plot_barrier_scatter_by_bucket(
-        df,                     # your DataFrame
+    plot_runtime_scaling(
+        df,
         model_name="vit_b_16_32",
-        world_size=4,            # number of ranks/nodes
-        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],  # networks to plot
-        colors=colors,
-        networks_labels=networks_labels
+        bucket_size=8,
+        local_batch_size=32,
+        runs_per_rank=10,
+        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],
+        colors=colors_grouped,
+        networks_labels=networks_labels,
+        linestyles=linestyles
+    )
+
+    # Scatter plot: use grouped colors + markers
+    plot_barrier_scatter_by_bucket(
+        df,
+        model_name="vit_b_16_32",
+        world_size=4,
+        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],
+        colors=colors_grouped,
+        networks_labels=networks_labels,
+        markers=markers
+    )
+
+    # Stacked plot: use unique colors for each network
+    plot_runtime_with_barrier_stacked(
+        df,
+        model_name="vit_b_16_32",
+        bucket_size=128,
+        local_batch_size=32,
+        runs_per_rank=10,
+        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],
+        colors=colors_unique,
+        networks_labels=networks_labels,
     )
 
     plot_runtime_with_barrier_stacked(
-        df,                     # your DataFrame
+        df,
         model_name="vit_b_16_32",
-        bucket_size=128,
+        bucket_size=8,
         local_batch_size=32,
         runs_per_rank=10,
-        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],  # networks to plot
-        colors=colors,
-        networks_labels=networks_labels
+        networks=["nanjing-inter", "nanjing-intra", "ib", "eth", "boost_usr_prod"],
+        colors=colors_unique,
+        networks_labels=networks_labels,
     )
