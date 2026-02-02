@@ -6,7 +6,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 sys.path.append(str(Path(__file__).parent.parent))
-from py_utils.constants import *
+from py_utils.constants.machines import *
+from py_utils.constants.plots import *
 from py_utils.utils.plots import create_color_map, create_linestyle_map
 
 plt.rc('axes', titlesize=FONT_AXES - 2)     # fontsize of the axes title
