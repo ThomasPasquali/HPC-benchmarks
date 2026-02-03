@@ -33,15 +33,25 @@ CLUSTER_NAMES_MAP = {
 }
 
 PARTITION_NAMES_MAP = {
+  # HAICGU
   'ib': 'ib',
   'eth': 'eth',
-  'NSLB': 'nslb',
-  'plain': 'default',
+  
+  # Leonardo
   'boost_usr_prod': 'booster',
+  'emulating_nanjing': 'nj',
+  'emulating_haicgu': 'haicgu',
+  
+  # Nanjing
   'nanjing-inter': 'inter',
   'nanjing-intra': 'intra',
+  
   # Debug
   'test': 'test',
   'other': 'other',
+  
+  # Other
+  'NSLB': 'nslb',
+  'plain': 'default',
 }
 

@@ -12,16 +12,15 @@ from py_utils.utils.utils import dict_get
 sys.path.append(str(Path(__file__).parent.parent / 'machines' / 'Leonardo'))
 import nodelists_generator as leo_gen
 
-NODES=[2, 4, 8]
 PARTITION = 'boost_usr_prod'
-MAX_CANDIDATES = 1000
+MAX_CANDIDATES = 500
 NODELIST_RETRY_TIME_S = 5
 DO_NODELIST_RANKING = False
-MAX_JOBS_PER_NODELIST = 10
+MAX_JOBS_PER_NODELIST = 1
 
+NODELIST_TYPE_EMULATING_HAICGU = 'emulating_haicgu'
 NODELIST_TYPE_EMULATING_NANJING = 'emulating_nanjing'
 NODELIST_TYPE_DIFFERENT_DISTANCES = 'different_distances'
-NODELIST_TYPE_EMULATING_HAICGU = 'emulating_haicgu'
 
 def gen_config_name(nodes: int, nodelist_idx: int = 0) -> str:
     if nodelist_idx == 0:
@@ -115,6 +114,9 @@ def main():
                 
                 print(f'\n=== Processing jobs {job_chunk_start+1} to {job_chunk_start+len(job_chunk)} for {nodes} nodes ===')
                 
+                for j in job_chunk:
+                    j.variables['partition'] = args.nodelist_type
+                
                 # Get a new nodelist that's different from previously used ones
                 nodelist = get_nodelist(args.nodelist_type, nodes, used_nodelists)
                 if nodelist is None:
@@ -128,10 +130,10 @@ def main():
                     name=config_name,
                     cluster_name='leonardo',
                     partition=str(PARTITION),
-                    account='try25_HNS',
+                    account='IscrC_OMG-25',
                     nodes=str(nodes),
                     ntasks=str(nodes),
-                    cpus_per_task=1,
+                    cpus_per_task=32,
                     time="00:10:00",
                     gpus=0,
                     nodelist=nodelist,

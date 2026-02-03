@@ -1,17 +1,14 @@
 sequential: true
 
 variables:
-  nodes: [1, 2, 4, 8]
-  # partition: ["boost_usr_prod"] # Leonardo Booster
-  partition: ["eth", "ib"] # HAICGU
+  nodes: [2, 4, 8]
+  partition: ["boost_usr_prod"] # Leonardo Booster
+  # partition: ["eth", "ib"] # HAICGU
 
   bin:
-   - "graph500_bfs_2KiB"
-   - "graph500_bfs_32KiB"
    - "graph500_bfs_256KiB"
-   - "graph500_bfs_8MiB"
   scale: [20]
-  edgefactor: [8, 16, 32, 64]
+  edgefactor: [16]
 
 command: "mpirun -np {nodes} ./bin/{bin} {scale} {edgefactor}"
 

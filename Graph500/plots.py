@@ -411,7 +411,7 @@ def plot_scaling(
             handles,
             labels,
             title="System-Partition",
-            ncol=len(labels) if len(labels) <= 6 else len(df["cluster"].unique()),
+            ncol=len(labels) if len(labels) <= 10 else len(df["cluster"].unique()),
             fontsize=FONT_LEGEND,
             title_fontsize=FONT_LEGEND,
             loc="upper center",
